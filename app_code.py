@@ -116,3 +116,4 @@ if st.session_state.latest_image is not None:
         audio_file = generate_audio(punjabi_translation)
         st.audio(audio_file, format="audio/wav")
         st.success("Audio generated successfully!")
+    st.session_state.latest_image = None

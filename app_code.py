@@ -112,7 +112,7 @@ if st.session_state.show_camera is False:
 # Process the latest image
 if st.session_state.latest_image is not None:
     image = Image.open(st.session_state.latest_image)
-    st.image(image, caption="Processed Image", use_column_width=True)
+    st.image(image, caption="Processed Image", use_container_width=True)
     # Perform inference
     predicted_label, punjabi_translation = asyncio.run(perform_inference(image))
     if predicted_label == "Not Recognized":

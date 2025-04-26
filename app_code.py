@@ -4,12 +4,11 @@ import numpy as np
 import torch
 import asyncio
 from PIL import Image
-from transformers import ViTForImageClassification, ViTFeatureExtractor, VitsModel, AutoTokenizer
+from transformers import pipeline, ViTForImageClassification, ViTFeatureExtractor, VitsModel, AutoTokenizer
 from googletrans import Translator
 import tempfile
 
 # Load models
-#model_path = pipeline("isl-to-punjabi", model="vsingla/isl_trainer")
 model_path = "vsingla/isl_trainer"  # Model path from Hugging Face
 isl_to_punjabi = pipeline("translation", model=model_path)
 model = ViTForImageClassification.from_pretrained(isl_to_punjabi)

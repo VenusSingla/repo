@@ -115,8 +115,13 @@ if st.session_state.latest_image is not None:
     st.image(image, caption="Processed Image", use_column_width=True)
     # Perform inference
     predicted_label, punjabi_translation = asyncio.run(perform_inference(image))
-    st.success(f"Predicted: {predicted_label}")
-    st.info(f"Punjabi Translation: {punjabi_translation}")
+    if predicted_label == "Not Recognized":
+        st.error("Not recognized sign")
+        st.info(f"Punjabi Translation: {punjabi_translation}")
+    else:
+        st.success(f"Predicted: {predicted_label}")
+        st.info(f"Punjabi Translation: {punjabi_translation}")
+    
 
     if st.button("🔊 Generate Speech"):
         if predicted_label == "Not Recognized":

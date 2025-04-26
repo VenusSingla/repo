@@ -10,7 +10,7 @@ import tempfile
 
 # Load models
 model_path = "https://huggingface.co/vsingla/isl_trainer"
-model = ViTForImageClassification.from_pretrained(vsingla/isl_trainer)
+model = ViTForImageClassification.from_pretrained("vsingla/isl_trainer")
 processor = ViTFeatureExtractor.from_pretrained(vsingla/isl_trainer)
 model_speech = VitsModel.from_pretrained("facebook/mms-tts-pan")
 tokenizer = AutoTokenizer.from_pretrained("facebook/mms-tts-pan")

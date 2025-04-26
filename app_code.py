@@ -36,16 +36,23 @@ id2label = {
     '115': 'TODAY', '116': 'TRAIN', '117': 'TRUST', '118': 'TRUTH', '119': 'TURN_ON', '120': 'UNDERSTAND', '121': 'WANT',
     '122': 'WATER', '123': 'WEAR', '124': 'WELCOME', '125': 'WHAT', '126': 'WHERE', '127': 'WHO', '128': 'WORRY', '129': 'YOU_YOUR'
 }
-async def perform_inference(image):
+async def perform_inference(image, threshold=0.5):  # Threshold can be tuned
     inputs = processor(images=image, return_tensors="pt")
     with torch.no_grad():
         outputs = model(**inputs)
         predictions = torch.nn.functional.softmax(outputs.logits, dim=-1)
-        predicted_index = torch.argmax(predictions, dim=1).item()
+        predicted_probs, predicted_index = torch.max(predictions, dim=1)
+        predicted_index = predicted_index.item()
+        confidence = predicted_probs.item()
     
-    predicted_label = id2label.get(str(predicted_index), "Unknown")
-    translation = translator.translate(predicted_label, src='en', dest='pa')
-    return predicted_label, translation.text
+    if confidence < threshold:
+        # Confidence is too low, unknown sign
+        return "Not Recognized", "ਪਛਾਣਿਆ ਨਹੀਂ ਗਿਆ"  # Punjabi for "Not recognized"
+    else:
+        predicted_label = id2label.get(str(predicted_index), "Unknown")
+        translation = translator.translate(predicted_label, src='en', dest='pa')
+        return predicted_label, translation.text
+
 from scipy.io.wavfile import write
 
 def generate_audio(text):

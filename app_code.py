@@ -71,28 +71,49 @@ def generate_audio(text):
 st.set_page_config(page_title="ISL to Punjabi Translator", layout="centered")
 st.title("🖐️ Sanket2Shabd")
 st.write("Upload an image or capture from webcam")
+# Session states
+if "latest_image" not in st.session_state:
+    st.session_state.latest_image = None
+if "show_camera" not in st.session_state:
+    st.session_state.show_camera = False
 
+# Upload input
 uploaded_file = st.file_uploader("📁 Upload Image", type=["jpg", "png", "jpeg"])
-capture_image = st.camera_input("📸 Capture Image")
 
-image_to_process = None
+# Camera + Cancel buttons
+col1, col2 = st.columns([1, 1])
+with col1:
+    if st.button("📷 Capture Image"):
+        st.session_state.show_camera = True
+with col2:
+    if st.session_state.show_camera:
+        if st.button("❌ Cancel Capture"):
+            st.session_state.show_camera = False
+            st.rerun()
 
-# Priority: First use uploaded_file, then capture_image
-if uploaded_file is not None:
-    image_to_process = uploaded_file
-elif capture_image is not None:
-    image_to_process = capture_image
+# Camera input
+if st.session_state.show_camera:
+    capture_image = st.camera_input("Take a Picture")
+    if capture_image is not None:
+        st.session_state.latest_image = capture_image
+        st.session_state.show_camera = False
 
-if image_to_process is not None:
-    image = Image.open(image_to_process)
-    st.image(image, caption="Uploaded/Captured Image", use_column_width=True)
-    
-    with st.spinner("Predicting..."):
-        predicted_label, punjabi_translation = asyncio.run(perform_inference(image))
-    
+# Save uploaded image if no capture
+if st.session_state.show_camera is False:
+    if uploaded_file is not None and st.session_state.latest_image is None:
+        st.session_state.latest_image = uploaded_file
+
+# Process the latest image
+if st.session_state.latest_image is not None:
+    image = Image.open(st.session_state.latest_image)
+    st.image(image, caption="Processed Image", use_column_width=True)
+    # Perform inference
+    predicted_label, punjabi_translation = asyncio.run(perform_inference(image))
     st.success(f"Predicted: {predicted_label}")
     st.info(f"Punjabi Translation: {punjabi_translation}")
 
-    if st.button("🔊 Generate Speech", key=f"speech_{np.random.randint(10000)}"):
+    if st.button("🔊 Generate Speech"):
         audio_file = generate_audio(punjabi_translation)
         st.audio(audio_file, format="audio/wav")
+        st.success("Audio generated successfully!")
+    st.session_state.latest_image = None

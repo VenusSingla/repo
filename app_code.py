@@ -44,7 +44,7 @@ async def perform_inference(image):
         predicted_index = torch.argmax(predictions, dim=1).item()
     
     predicted_label = id2label.get(str(predicted_index), "Unknown")
-    translation = await translator.translate(predicted_label, src='en', dest='pa')
+    translation = translator.translate(predicted_label, src='en', dest='pa')
     return predicted_label, translation.text
 from scipy.io.wavfile import write
 

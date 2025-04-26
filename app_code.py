@@ -4,13 +4,13 @@ import numpy as np
 import torch
 import asyncio
 from PIL import Image
-from transformers import AutoModelForImageClassification, AutoFeatureExtractor, ViTForImageClassification, ViTFeatureExtractor, VitsModel, AutoTokenizer
+from transformers import ViTForImageClassification, ViTFeatureExtractor, VitsModel, AutoTokenizer
 from googletrans import Translator
 import tempfile
 
 # Load models
-model = AutoModelForImageClassification.from_pretrained("vsingla/isl_trainer")
-processor = AutoFeatureExtractor.from_pretrained("vsingla/isl_trainer")
+model = ViTForImageClassification.from_pretrained("vsingla/isl_trainer")
+processor = ViTFeatureExtractor.from_pretrained("vsingla/isl_trainer")
 model_speech = VitsModel.from_pretrained("facebook/mms-tts-pan")
 tokenizer = AutoTokenizer.from_pretrained("facebook/mms-tts-pan")
 translator = Translator()

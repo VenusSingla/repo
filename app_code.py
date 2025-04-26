@@ -98,11 +98,10 @@ if st.session_state.show_camera:
         st.session_state.latest_image = capture_image
         st.session_state.show_camera = False
 
-# Save uploaded image
-if uploaded_file is not None:
-    st.session_state.latest_image = uploaded_file
-
-
+# Save uploaded image if no capture
+if st.session_state.show_camera is False:
+    if uploaded_file is not None and st.session_state.latest_image is None:
+        st.session_state.latest_image = uploaded_file
 
 # Process the latest image
 if st.session_state.latest_image is not None:
@@ -113,7 +112,7 @@ if st.session_state.latest_image is not None:
     st.success(f"Predicted: {predicted_label}")
     st.info(f"Punjabi Translation: {punjabi_translation}")
 
-    if st.button("Generate Speech"):
+    if st.button("🔊 Generate Speech"):
         audio_file = generate_audio(punjabi_translation)
         st.audio(audio_file, format="audio/wav")
         st.success("Audio generated successfully!")

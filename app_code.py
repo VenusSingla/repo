@@ -9,9 +9,11 @@ from googletrans import Translator
 import tempfile
 
 # Load models
-model_path = pipeline("isl-to-punjabi", model="vsingla/isl_trainer")
-model = ViTForImageClassification.from_pretrained(model_path)
-processor = ViTFeatureExtractor.from_pretrained(model_path)
+#model_path = pipeline("isl-to-punjabi", model="vsingla/isl_trainer")
+model_path = "vsingla/isl_trainer"  # Model path from Hugging Face
+isl_to_punjabi = pipeline("translation", model=model_path)
+model = ViTForImageClassification.from_pretrained(isl_to_punjabi)
+processor = ViTFeatureExtractor.from_pretrained(isl_to_punjabi)
 model_speech = VitsModel.from_pretrained("facebook/mms-tts-pan")
 tokenizer = AutoTokenizer.from_pretrained("facebook/mms-tts-pan")
 translator = Translator()

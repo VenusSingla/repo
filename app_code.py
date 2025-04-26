@@ -9,7 +9,7 @@ from googletrans import Translator
 import tempfile
 
 # Load models
-model_path = git clone https://huggingface.co/vsingla/isl_trainer/
+model_path = "https://huggingface.co/vsingla/isl_trainer/"
 model = ViTForImageClassification.from_pretrained(model_path)
 processor = ViTFeatureExtractor.from_pretrained(model_path)
 model_speech = VitsModel.from_pretrained("facebook/mms-tts-pan")

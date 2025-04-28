@@ -46,20 +46,7 @@ def perform_inference(image, threshold=0.5):  # Threshold can be tuned
 
     inputs = processor(images=image, return_tensors="pt")
     print("Before moving inputs to device:")
-    for k, v in inputs.items():
-        print(f"{k}: {v.device}")
-
-    # Ensure each input tensor is moved to the same device as the model
-    if 'pixel_values' in inputs:
-        inputs['pixel_values'] = inputs['pixel_values'].to(device)
-    if 'attention_mask' in inputs:
-        inputs['attention_mask'] = inputs['attention_mask'].to(device)
-
-    # Debug: Check devices after moving to the correct device
-    print("After moving inputs to device:")
-    for k, v in inputs.items():
-        print(f"{k}: {v.device}")
-
+    
     with torch.no_grad():
         outputs = model(**inputs)
         predictions = torch.nn.functional.softmax(outputs.logits, dim=-1)

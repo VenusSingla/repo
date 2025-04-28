@@ -9,10 +9,14 @@ from googletrans import Translator
 import tempfile
 
 # Load models
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = ViTForImageClassification.from_pretrained("vsingla/isl_trainer")
 processor = ViTFeatureExtractor.from_pretrained("vsingla/isl_trainer")
 model_speech = VitsModel.from_pretrained("facebook/mms-tts-pan")
 tokenizer = AutoProcessor.from_pretrained("facebook/mms-tts-pan")
+model.to(device)
+model_speech.to(device)
+
 translator = Translator()
 
 # Label mapping
@@ -37,7 +41,6 @@ id2label = {
     '122': 'WATER', '123': 'WEAR', '124': 'WELCOME', '125': 'WHAT', '126': 'WHERE', '127': 'WHO', '128': 'WORRY', '129': 'YOU_YOUR'
 }
 def perform_inference(image, threshold=0.5):  # Threshold can be tuned
-
     inputs = processor(images=image, return_tensors="pt")
     with torch.no_grad():
         outputs = model(**inputs)

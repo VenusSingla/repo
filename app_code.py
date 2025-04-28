@@ -9,9 +9,14 @@ from googletrans import Translator
 import tempfile
 
 # Load models
-# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = ViTForImageClassification.from_pretrained("vsingla/isl_trainer")
 processor = ViTFeatureExtractor.from_pretrained("vsingla/isl_trainer")
+model = model.to(device)
+
+# Debug: Ensure the model is on the correct device
+print(f"Model is on device: {next(model.parameters()).device}")
+
 model_speech = VitsModel.from_pretrained("facebook/mms-tts-pan")
 tokenizer = AutoProcessor.from_pretrained("facebook/mms-tts-pan")
 translator = Translator()

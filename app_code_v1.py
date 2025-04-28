@@ -9,13 +9,17 @@ from googletrans import Translator
 import tempfile
 from scipy.io.wavfile import write
 
-# Load models
-model = ViTForImageClassification.from_pretrained("vsingla/isl_trainer")
-processor = ViTFeatureExtractor.from_pretrained("vsingla/isl_trainer")
-model_speech = VitsModel.from_pretrained("facebook/mms-tts-pan")
-tokenizer = AutoTokenizer.from_pretrained("facebook/mms-tts-pan")
-translator = Translator()
+@st.cache_resource
+def load_models():
+    model = ViTForImageClassification.from_pretrained("vsingla/isl_trainer")
+    processor = ViTFeatureExtractor.from_pretrained("vsingla/isl_trainer")
+    model_speech = VitsModel.from_pretrained("facebook/mms-tts-pan")
+    tokenizer = AutoTokenizer.from_pretrained("facebook/mms-tts-pan")
+    translator = Translator()
+    return model, processor, model_speech, tokenizer, translator
 
+# Load once
+model, processor, model_speech, tokenizer, translator = load_models()
 # Label mapping
 id2label = {
     '0': 'ACCIDENT', '1': 'AEROPLANE', '2': 'AFRAID', '3': 'AGREE', '4': 'ALL', '5': 'ANGRY', '6': 'ANYTHING',

@@ -47,7 +47,9 @@ def perform_inference(image, threshold=0.5):  # Threshold can be tuned
 
     inputs = processor(images=image, return_tensors="pt")
     print("Before moving inputs to device:")
-    
+    for key in inputs:
+        inputs[key] = inputs[key].to(device)
+
     with torch.no_grad():
         outputs = model(**inputs)
         predictions = torch.nn.functional.softmax(outputs.logits, dim=-1)

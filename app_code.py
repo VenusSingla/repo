@@ -37,7 +37,7 @@ id2label = {
     '115': 'TODAY', '116': 'TRAIN', '117': 'TRUST', '118': 'TRUTH', '119': 'TURN_ON', '120': 'UNDERSTAND', '121': 'WANT',
     '122': 'WATER', '123': 'WEAR', '124': 'WELCOME', '125': 'WHAT', '126': 'WHERE', '127': 'WHO', '128': 'WORRY', '129': 'YOU_YOUR'
 }
-async def perform_inference(image, threshold=0.5):  # Threshold can be tuned
+def perform_inference(image, threshold=0.5):  # Threshold can be tuned
     inputs = processor(images=image, return_tensors="pt")
     model.to(device)
     inputs = {k: v.to(device) for k, v in inputs.items()}
@@ -114,7 +114,7 @@ if st.session_state.latest_image is not None:
     image = Image.open(st.session_state.latest_image)
     st.image(image, caption="Processed Image", use_container_width=True)
     # Perform inference
-    predicted_label, punjabi_translation = asyncio.run(perform_inference(image))
+    predicted_label, punjabi_translation = perform_inference(image)
     if predicted_label == "Not Recognized":
         st.error("Not recognized sign")
         st.info(f"Punjabi Translation: {punjabi_translation}")

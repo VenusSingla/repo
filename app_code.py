@@ -61,10 +61,7 @@ def generate_audio(text):
     with torch.no_grad():
         output = model_speech(**inputs).waveform
 
-    # Convert PyTorch tensor to NumPy
-    waveform_np = output.numpy()
-
-    # Define sampling rate
+    waveform_np = output.cpu().numpy()
     sampling_rate = model_speech.config.sampling_rate
 
     # Save as WAV file

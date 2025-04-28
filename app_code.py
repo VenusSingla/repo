@@ -157,45 +157,39 @@ if uploaded_file is not None:
     
     st.session_state.latest_image = uploaded_file
 
-# Camera input
 elif st.session_state.show_camera:
     capture_image = st.camera_input("Take a Picture")
     if capture_image is not None:
         st.session_state.latest_image = capture_image
         st.session_state.show_camera = False
 
-# Save uploaded image if no capture
-elif st.session_state.show_camera is False:
-    if uploaded_file is not None and st.session_state.latest_image is None:
-        st.session_state.latest_image = uploaded_file
+# Process latest image if available
+if st.session_state.latest_image is not None:
+    try:
+        # Important: properly open the uploaded/captured file as image
+        image = Image.open(st.session_state.latest_image)
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+        st.image(image, caption="Processed Image", use_container_width=True)
 
-# Process the latest image
-elif st.session_state.latest_image is not None:
-    image = Image.open(st.session_state.latest_image)
-    st.image(image, caption="Processed Image", use_container_width=True)
-    # Perform inference only once
-    predicted_label, punjabi_translation, landmarks = asyncio.run(perform_inference(image))
-    if landmarks:
-        image_with_landmarks = draw_landmarks(image.copy(), landmarks)
-        st.image(image_with_landmarks, caption="Image with Landmarks", use_container_width=True)
+        # Perform inference
+        predicted_label, punjabi_translation, landmarks = asyncio.run(perform_inference(image, threshold=threshold))
 
-    if predicted_label == "Not Recognized":
-        st.error("Not recognized sign")
-        st.info(f"Punjabi Translation: {punjabi_translation}")
-        generate_speech_disabled = True
-    else:
-        st.success(f"Predicted: {predicted_label}")
-        st.info(f"Punjabi Translation: {punjabi_translation}")
-        generate_speech_disabled = False
+        if landmarks:
+            image_with_landmarks = draw_landmarks(image.copy(), landmarks)
+            st.image(image_with_landmarks, caption="Image with Landmarks", use_container_width=True)
 
-if st.button("Generate Speech", disabled=generate_speech_disabled):
-    # Generate speech for "Not recognized" in Punjabi if unknown or low confidence
-    if predicted_label == "Not Recognized":
-        unknown_text = "Not recognized sign"  # Or the Punjabi text: "ਪਛਾਣਿਆ ਨਹੀਂ ਗਿਆ"
-        audio_file = generate_audio(unknown_text)
-    else:
-        audio_file = generate_audio(punjabi_translation)
-    st.audio(audio_file, format="audio/wav")
-    st.success("Audio generated successfully!")
-    
-st.session_state.latest_image = None
+        if predicted_label == "Not Recognized":
+            st.error("Not recognized sign")
+            st.info(f"Punjabi Translation: {punjabi_translation}")
+            generate_speech_disabled = True
+        else:
+            st.success(f"Predicted: {predicted_label}")
+            st.info(f"Punjabi Translation: {punjabi_translation}")
+            generate_speech_disabled = False
+
+    except Exception as e:
+        st.error(f"An error occurred while processing the image: {str(e)}")
+        print(f"Error: {str(e)}")
+
+    st.session_state.latest_image = None  # Reset after processing

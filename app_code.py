@@ -63,6 +63,7 @@ async def perform_inference(image, threshold=0.5):  # Threshold can be tuned
     except Exception as e:
         print(f"Error during inference: {str(e)}")  # Log the error
         return "Error", str(e)
+
 from scipy.io.wavfile import write
 
 def generate_audio(text):
@@ -92,42 +93,44 @@ if "show_camera" not in st.session_state:
     st.session_state.show_camera = False
 
 # Upload input
-MAX_FILE_SIZE=200 * 1024 * 1024
+MAX_FILE_SIZE = 200 * 1024 * 1024  # 200 MB
+MAX_DIMENSION = 2000  # Max image dimension (you can adjust this)
+
 uploaded_file = st.file_uploader("📁 Upload Image", type=["jpg", "png", "jpeg"])
 if uploaded_file is not None:
-    file_size = uploaded_file.size  # in bytes
+    try:
+        image = Image.open(uploaded_file)
+        
+        # Check image size (in MB) and resize if necessary
+        file_size = uploaded_file.size  # in bytes
+        if file_size > MAX_FILE_SIZE:
+            st.warning(f"Image is too large. Resizing it to fit within the size limit of 200MB.")
+            # Resize image to fit within the max file size limit
+            image = image.resize((MAX_DIMENSION, MAX_DIMENSION), Image.ANTIALIAS)
+        
+        # Ensure image is in RGB mode before processing
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+        
+        st.image(image, caption="Processed Image", use_container_width=True)
+        
+        # Perform inference
+        predicted_label, punjabi_translation = asyncio.run(perform_inference(image))
 
-    if file_size > MAX_FILE_SIZE:
-        st.warning(f"Image file is too large! Please upload an image smaller than 200MB.")
-    else:
-        try:
-            image = Image.open(uploaded_file)
-            
-            # Debugging log to see image format
-            print(f"Original image mode: {image.mode}")
+        if predicted_label == "Not Recognized":
+            st.error("Not recognized sign")
+            st.info(f"Punjabi Translation: {punjabi_translation}")
+            generate_speech_disabled = True
+        else:
+            st.success(f"Predicted: {predicted_label}")
+            st.info(f"Punjabi Translation: {punjabi_translation}")
+            generate_speech_disabled = False
 
-            # Ensure image is in RGB mode before processing
-            if image.mode != 'RGB':
-                image = image.convert('RGB')
-            
-            st.image(image, caption="Processed Image", use_container_width=True)
-            
-            # Perform inference
-            predicted_label, punjabi_translation = asyncio.run(perform_inference(image))
-
-            if predicted_label == "Not Recognized":
-                st.error("Not recognized sign")
-                st.info(f"Punjabi Translation: {punjabi_translation}")
-                generate_speech_disabled = True
-            else:
-                st.success(f"Predicted: {predicted_label}")
-                st.info(f"Punjabi Translation: {punjabi_translation}")
-                generate_speech_disabled = False
-
-        except Exception as e:
-            st.error(f"An error occurred while processing the image: {str(e)}")
-            print(f"Error: {str(e)}")
-        st.session_state.latest_image = uploaded_file
+    except Exception as e:
+        st.error(f"An error occurred while processing the image: {str(e)}")
+        print(f"Error: {str(e)}")
+    
+    st.session_state.latest_image = uploaded_file
 # Camera + Cancel buttons
 col1, col2 = st.columns([1, 1])
 with col1:

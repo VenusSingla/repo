@@ -63,14 +63,12 @@ async def perform_inference(image, threshold=0.3):  # Threshold can be tuned
         else:
             predicted_label = id2label.get(str(predicted_index), "Unknown")
             translation = translator.translate(predicted_label, src='en', dest='pa')
-            return predicted_label, translation.text
-
+            landmarks = [(100, 150), (200, 250), (300, 350)]  # Dummy points for example
+            return predicted_label, translation.text, landmarks
     except Exception as e:
         print(f"Error during inference: {str(e)}")  # Log the error
         return "Error", str(e)
-        landmarks = [(100, 150), (200, 250), (300, 350)]  # Dummy points for example
-            
-        return predicted_label, translation.text, landmarks
+        
 from scipy.io.wavfile import write
 
 def generate_audio(text):

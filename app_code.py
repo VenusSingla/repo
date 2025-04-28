@@ -72,7 +72,7 @@ async def perform_inference(image, threshold=0.3):  # Threshold can be tuned
             return predicted_label, translation.text, landmarks
     except Exception as e:
         print(f"Error during inference: {str(e)}")  # Log the error
-        return "Error", str(e)
+        return "Error", str(e), []
 
 # Function to generate audio
 def generate_audio(text):
@@ -134,9 +134,11 @@ if uploaded_file is not None:
         st.image(image, caption="Processed Image", use_container_width=True)
         # Perform inference once
         predicted_label, punjabi_translation, landmarks = asyncio.run(perform_inference(image))
-        if landmarks:
+        if landmarks:  # Check if landmarks are present
             image_with_landmarks = draw_landmarks(image.copy(), landmarks)
             st.image(image_with_landmarks, caption="Image with Landmarks", use_container_width=True)
+        else:
+            st.warning("No landmarks to display.")
 
         if predicted_label == "Not Recognized":
             st.error("Not recognized sign")
@@ -148,7 +150,7 @@ if uploaded_file is not None:
             generate_speech_disabled = False
     except Exception as e:
         st.error(f"An error occurred while processing the image: {str(e)}")
-        print(f"Error: {str(e)}")
+        print(f"Error: {str(e)}") 
     
     st.session_state.latest_image = uploaded_file
 

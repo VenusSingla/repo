@@ -13,7 +13,10 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = ViTForImageClassification.from_pretrained("vsingla/isl_trainer")
 processor = ViTFeatureExtractor.from_pretrained("vsingla/isl_trainer")
 model.to(device)
-model.vit.embeddings.cls_token = model.vit.embeddings.cls_token.to(device)
+try:
+    model.vit.embeddings.cls_token = model.vit.embeddings.cls_token.to(device)
+except Exception as e:
+    print("Warning: cls_token move failed, but continuing.", e)
 model_speech = VitsModel.from_pretrained("facebook/mms-tts-pan")
 tokenizer = AutoProcessor.from_pretrained("facebook/mms-tts-pan")
 translator = Translator()

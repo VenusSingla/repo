@@ -12,7 +12,7 @@ import tempfile
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = ViTForImageClassification.from_pretrained("vsingla/isl_trainer")
 processor = ViTFeatureExtractor.from_pretrained("vsingla/isl_trainer")
-model.to(device)
+model.vit.embeddings.cls_token = model.vit.embeddings.cls_token.to(device)
 model_speech = VitsModel.from_pretrained("facebook/mms-tts-pan")
 tokenizer = AutoProcessor.from_pretrained("facebook/mms-tts-pan")
 translator = Translator()

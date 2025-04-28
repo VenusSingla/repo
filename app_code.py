@@ -95,39 +95,38 @@ if "show_camera" not in st.session_state:
 MAX_FILE_SIZE=200 * 1024 * 1024
 uploaded_file = st.file_uploader("📁 Upload Image", type=["jpg", "png", "jpeg"])
 if uploaded_file is not None:
-    try:
-        image = Image.open(uploaded_file)
-        
-        # Debugging log to see image format
-        print(f"Original image mode: {image.mode}")
-
-        # Ensure image is in RGB mode before processing
-        if image.mode != 'RGB':
-            image = image.convert('RGB')
-        
-        st.image(image, caption="Processed Image", use_container_width=True)
-        
-        # Perform inference
-        predicted_label, punjabi_translation = asyncio.run(perform_inference(image))
-
-        if predicted_label == "Not Recognized":
-            st.error("Not recognized sign")
-            st.info(f"Punjabi Translation: {punjabi_translation}")
-            generate_speech_disabled = True
-        else:
-            st.success(f"Predicted: {predicted_label}")
-            st.info(f"Punjabi Translation: {punjabi_translation}")
-            generate_speech_disabled = False
-
-    except Exception as e:
-        st.error(f"An error occurred while processing the image: {str(e)}")
-        print(f"Error: {str(e)}")   
-    # Check file size
     file_size = uploaded_file.size  # in bytes
 
     if file_size > MAX_FILE_SIZE:
         st.warning(f"Image file is too large! Please upload an image smaller than 200MB.")
     else:
+        try:
+            image = Image.open(uploaded_file)
+            
+            # Debugging log to see image format
+            print(f"Original image mode: {image.mode}")
+
+            # Ensure image is in RGB mode before processing
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+            
+            st.image(image, caption="Processed Image", use_container_width=True)
+            
+            # Perform inference
+            predicted_label, punjabi_translation = asyncio.run(perform_inference(image))
+
+            if predicted_label == "Not Recognized":
+                st.error("Not recognized sign")
+                st.info(f"Punjabi Translation: {punjabi_translation}")
+                generate_speech_disabled = True
+            else:
+                st.success(f"Predicted: {predicted_label}")
+                st.info(f"Punjabi Translation: {punjabi_translation}")
+                generate_speech_disabled = False
+
+        except Exception as e:
+            st.error(f"An error occurred while processing the image: {str(e)}")
+            print(f"Error: {str(e)}")
         st.session_state.latest_image = uploaded_file
 # Camera + Cancel buttons
 col1, col2 = st.columns([1, 1])

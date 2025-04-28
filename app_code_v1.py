@@ -66,7 +66,7 @@ async def perform_inference(image, threshold=0.6, batch_size=5):
         inputs = processor(images=images_batch, return_tensors="pt")
         
         with torch.no_grad():
-            outputs = model(**inputs)
+            outputs = model(pixel_values=inputs["pixel_values"])  # <<< FIXED LINE
             predictions = torch.nn.functional.softmax(outputs.logits, dim=-1)
         
         # Average over batch
@@ -80,8 +80,7 @@ async def perform_inference(image, threshold=0.6, batch_size=5):
         else:
             predicted_label = id2label.get(str(predicted_index), "Unknown")
             translation = translator.translate(predicted_label, src='en', dest='pa')
-            # Still dummy landmarks (to improve later)
-            landmarks = [(100, 150), (200, 250), (300, 350)]
+            landmarks = [(100, 150), (200, 250), (300, 350)]  # Dummy landmarks
             return predicted_label, translation.text, landmarks, confidence
 
     except Exception as e:

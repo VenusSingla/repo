@@ -115,7 +115,7 @@ with col2:
 # Upload input
 MAX_FILE_SIZE = 200 * 1024 * 1024  # 200 MB
 MAX_DIMENSION = 2000  # Max image dimension (you can adjust this)
-
+generate_speech_disabled = True
 uploaded_file = st.file_uploader("📁 Upload Image", type=["jpg", "png", "jpeg"])
 if uploaded_file is not None:
     try:

@@ -114,7 +114,7 @@ if st.session_state.latest_image is not None:
     image = Image.open(st.session_state.latest_image)
     st.image(image, caption="Processed Image", use_container_width=True)
     # Perform inference
-    predicted_label, punjabi_translation = run(perform_inference(image))
+    predicted_label, punjabi_translation = perform_inference(image)
     if predicted_label == "Not Recognized":
         st.error("Not recognized sign")
         st.info(f"Punjabi Translation: {punjabi_translation}")

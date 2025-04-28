@@ -86,19 +86,23 @@ async def perform_inference(image, threshold=0.6, batch_size=5):
 
 # Function to generate audio
 def generate_audio(text):
+    # Use the tokenizer to tokenize text
     inputs = tokenizer(text, return_tensors="pt")
     
+    # Generate waveform directly
     with torch.no_grad():
-        output = model_speech(**inputs).waveform
-
-    waveform_np = output.cpu().numpy()
-    sampling_rate = model_speech.config.sampling_rate
+        outputs = model_speech.generate(**inputs)
+    
+    waveform_np = outputs.cpu().numpy()
+    
+    # Sampling rate (fixed for facebook/mms-tts-pan)
+    sampling_rate = 16000  # 16 kHz is standard
 
     # Save as WAV file
     audio_filename = "output_audio.wav"
-    write(audio_filename, sampling_rate, waveform_np.T)  # Fix: Using scipy to save
+    write(audio_filename, sampling_rate, waveform_np.T)  # Transpose for correct shape
 
-    return audio_filename  # Return file path
+    return audio_filename
 
 # ------------------ Streamlit UI ------------------
 

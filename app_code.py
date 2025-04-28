@@ -37,6 +37,8 @@ id2label = {
     '122': 'WATER', '123': 'WEAR', '124': 'WELCOME', '125': 'WHAT', '126': 'WHERE', '127': 'WHO', '128': 'WORRY', '129': 'YOU_YOUR'
 }
 async def perform_inference(image, threshold=0.5):  # Threshold can be tuned
+    if image.mode != 'RGB':
+        image = image.convert('RGB')
     inputs = processor(images=image, return_tensors="pt")
     with torch.no_grad():
         outputs = model(**inputs)

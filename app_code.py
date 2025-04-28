@@ -143,7 +143,7 @@ if uploaded_file is not None:
             st.success(f"Predicted: {predicted_label}")
             st.info(f"Punjabi Translation: {punjabi_translation}")
             generate_speech_disabled = False
-			if st.button("Generate Speech", disabled=generate_speech_disabled):
+        if st.button("Generate Speech", disabled=generate_speech_disabled):
         # Generate speech for "Not recognized" in Punjabi if unknown or low confidence
         if predicted_label == "Not Recognized":
             unknown_text = "Not recognized sign"  # Or the Punjabi text: "ਪਛਾਣਿਆ ਨਹੀਂ ਗਿਆ"

@@ -37,24 +37,32 @@ id2label = {
     '122': 'WATER', '123': 'WEAR', '124': 'WELCOME', '125': 'WHAT', '126': 'WHERE', '127': 'WHO', '128': 'WORRY', '129': 'YOU_YOUR'
 }
 async def perform_inference(image, threshold=0.5):  # Threshold can be tuned
-    if image.mode != 'RGB':
-        image = image.convert('RGB')
-    inputs = processor(images=image, return_tensors="pt")
-    with torch.no_grad():
-        outputs = model(**inputs)
-        predictions = torch.nn.functional.softmax(outputs.logits, dim=-1)
-        predicted_probs, predicted_index = torch.max(predictions, dim=1)
-        predicted_index = predicted_index.item()
-        confidence = predicted_probs.item()
-    
-    if confidence < threshold:
-        # Confidence is too low, unknown sign
-        return "Not Recognized", "ਪਛਾਣਿਆ ਨਹੀਂ ਗਿਆ"  # Punjabi for "Not recognized"
-    else:
-        predicted_label = id2label.get(str(predicted_index), "Unknown")
-        translation = translator.translate(predicted_label, src='en', dest='pa')
-        return predicted_label, translation.text
+    try:
+        # Ensure the image is in RGB mode (convert if necessary)
+        if image.mode != 'RGB':
+            print(f"Image mode before conversion: {image.mode}")  # Debugging log
+            image = image.convert('RGB')
+            print(f"Image mode after conversion: {image.mode}")  # Debugging log
 
+        # Process the image for inference
+        inputs = processor(images=image, return_tensors="pt")
+        with torch.no_grad():
+            outputs = model(**inputs)
+            predictions = torch.nn.functional.softmax(outputs.logits, dim=-1)
+            predicted_probs, predicted_index = torch.max(predictions, dim=1)
+            predicted_index = predicted_index.item()
+            confidence = predicted_probs.item()
+
+        if confidence < threshold:
+            return "Not Recognized", "ਪਛਾਣਿਆ ਨਹੀਂ ਗਿਆ"
+        else:
+            predicted_label = id2label.get(str(predicted_index), "Unknown")
+            translation = translator.translate(predicted_label, src='en', dest='pa')
+            return predicted_label, translation.text
+
+    except Exception as e:
+        print(f"Error during inference: {str(e)}")  # Log the error
+        return "Error", str(e)
 from scipy.io.wavfile import write
 
 def generate_audio(text):
@@ -87,6 +95,33 @@ if "show_camera" not in st.session_state:
 MAX_FILE_SIZE=200 * 1024 * 1024
 uploaded_file = st.file_uploader("📁 Upload Image", type=["jpg", "png", "jpeg"])
 if uploaded_file is not None:
+    try:
+        image = Image.open(uploaded_file)
+        
+        # Debugging log to see image format
+        print(f"Original image mode: {image.mode}")
+
+        # Ensure image is in RGB mode before processing
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+        
+        st.image(image, caption="Processed Image", use_container_width=True)
+        
+        # Perform inference
+        predicted_label, punjabi_translation = asyncio.run(perform_inference(image))
+
+        if predicted_label == "Not Recognized":
+            st.error("Not recognized sign")
+            st.info(f"Punjabi Translation: {punjabi_translation}")
+            generate_speech_disabled = True
+        else:
+            st.success(f"Predicted: {predicted_label}")
+            st.info(f"Punjabi Translation: {punjabi_translation}")
+            generate_speech_disabled = False
+
+    except Exception as e:
+        st.error(f"An error occurred while processing the image: {str(e)}")
+        print(f"Error: {str(e)}")   
     # Check file size
     file_size = uploaded_file.size  # in bytes
 

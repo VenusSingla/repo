@@ -36,7 +36,7 @@ id2label = {
     '115': 'TODAY', '116': 'TRAIN', '117': 'TRUST', '118': 'TRUTH', '119': 'TURN_ON', '120': 'UNDERSTAND', '121': 'WANT',
     '122': 'WATER', '123': 'WEAR', '124': 'WELCOME', '125': 'WHAT', '126': 'WHERE', '127': 'WHO', '128': 'WORRY', '129': 'YOU_YOUR'
 }
-async def perform_inference(image, threshold=0.5):  # Threshold can be tuned
+async def perform_inference(image, threshold=0.3):  # Threshold can be tuned
     try:
         # Ensure the image is in RGB mode (convert if necessary)
         if image.mode != 'RGB':

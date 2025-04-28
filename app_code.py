@@ -146,7 +146,6 @@ if uploaded_file is not None:
         print(f"Error: {str(e)}")
     
     st.session_state.latest_image = uploaded_file
-            st.session_state.show_camera = False
 
 # Camera input
 elif st.session_state.show_camera:

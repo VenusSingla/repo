@@ -12,6 +12,7 @@ import tempfile
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = ViTForImageClassification.from_pretrained("vsingla/isl_trainer")
 processor = ViTFeatureExtractor.from_pretrained("vsingla/isl_trainer")
+model.to(device)
 model.vit.embeddings.cls_token = model.vit.embeddings.cls_token.to(device)
 model_speech = VitsModel.from_pretrained("facebook/mms-tts-pan")
 tokenizer = AutoProcessor.from_pretrained("facebook/mms-tts-pan")
@@ -39,6 +40,7 @@ id2label = {
     '122': 'WATER', '123': 'WEAR', '124': 'WELCOME', '125': 'WHAT', '126': 'WHERE', '127': 'WHO', '128': 'WORRY', '129': 'YOU_YOUR'
 }
 def perform_inference(image, threshold=0.5):  # Threshold can be tuned
+    model.eval() 
     inputs = processor(images=image, return_tensors="pt")
     inputs = {k: v.to(device) for k, v in inputs.items()}
     with torch.no_grad():

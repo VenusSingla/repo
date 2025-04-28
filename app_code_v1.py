@@ -144,7 +144,7 @@ if uploaded_file is not None:
             image = image.convert('RGB')
         st.image(image, caption="Processed Image", use_container_width=True)
         # Perform inference once
-        predicted_label, punjabi_translation, landmarks, confidence = await perform_inference(image, threshold=threshold)
+        predicted_label, punjabi_translation, landmarks, confidence = asyncio.run(perform_inference(image, threshold=threshold))
 
         if landmarks:  # Check if landmarks are present
             image_with_landmarks = draw_landmarks(image.copy(), landmarks)
@@ -183,7 +183,7 @@ elif st.session_state.latest_image is not None:
     image = Image.open(st.session_state.latest_image)
     st.image(image, caption="Processed Image", use_container_width=True)
     # Perform inference only once
-    predicted_label, punjabi_translation, landmarks, confidence = await perform_inference(image, threshold=threshold)
+    predicted_label, punjabi_translation, landmarks, confidence = asyncio.run(perform_inference(image, threshold=threshold))
 
     if landmarks:
         image_with_landmarks = draw_landmarks(image.copy(), landmarks)

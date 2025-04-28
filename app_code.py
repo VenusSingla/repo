@@ -121,7 +121,7 @@ if uploaded_file is not None:
         
         # Perform inference once
         predicted_label, punjabi_translation,landmarks = asyncio.run(perform_inference(image))
-         if landmarks:
+        if landmarks:
             image_with_landmarks = draw_landmarks(image.copy(), landmarks)
             st.image(image_with_landmarks, caption="Image with Landmarks", use_container_width=True)
 

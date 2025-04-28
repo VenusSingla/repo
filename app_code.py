@@ -82,8 +82,16 @@ if "show_camera" not in st.session_state:
     st.session_state.show_camera = False
 
 # Upload input
+MAX_FILE_SIZE=200 * 1024 * 1024
 uploaded_file = st.file_uploader("📁 Upload Image", type=["jpg", "png", "jpeg"])
+if uploaded_file is not None:
+    # Check file size
+    file_size = uploaded_file.size  # in bytes
 
+    if file_size > MAX_FILE_SIZE:
+        st.warning(f"Image file is too large! Please upload an image smaller than 200MB.")
+    else:
+        st.session_state.latest_image = uploaded_file
 # Camera + Cancel buttons
 col1, col2 = st.columns([1, 1])
 with col1:

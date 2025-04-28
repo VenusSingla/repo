@@ -39,6 +39,7 @@ id2label = {
 }
 def perform_inference(image, threshold=0.5):  # Threshold can be tuned
     inputs = processor(images=image, return_tensors="pt")
+    model.to(device)
     inputs = {k: v.to(device) for k, v in inputs.items()}
     with torch.no_grad():
         outputs = model(**inputs)

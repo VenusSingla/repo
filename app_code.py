@@ -114,7 +114,7 @@ if uploaded_file is not None:
         
         st.image(image, caption="Processed Image", use_container_width=True)
         
-        # Perform inference
+        # Perform inference once
         predicted_label, punjabi_translation = asyncio.run(perform_inference(image))
 
         if predicted_label == "Not Recognized":
@@ -157,17 +157,16 @@ if st.session_state.show_camera is False:
 if st.session_state.latest_image is not None:
     image = Image.open(st.session_state.latest_image)
     st.image(image, caption="Processed Image", use_container_width=True)
-    # Perform inference
+    # Perform inference only once
     predicted_label, punjabi_translation = asyncio.run(perform_inference(image))
+    
     if predicted_label == "Not Recognized":
         st.error("Not recognized sign")
         st.info(f"Punjabi Translation: {punjabi_translation}")
-        # Disable the "Generate Speech" button if not recognized
         generate_speech_disabled = True
     else:
         st.success(f"Predicted: {predicted_label}")
         st.info(f"Punjabi Translation: {punjabi_translation}")
-        # Enable the "Generate Speech" button if recognized
         generate_speech_disabled = False
 
     if st.button("Generate Speech", disabled=generate_speech_disabled):

@@ -9,13 +9,8 @@ from googletrans import Translator
 import tempfile
 
 # Load models
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(f"Using device: {device}")
 model = ViTForImageClassification.from_pretrained("vsingla/isl_trainer")
 processor = ViTFeatureExtractor.from_pretrained("vsingla/isl_trainer")
-
-
-
 model_speech = VitsModel.from_pretrained("facebook/mms-tts-pan")
 tokenizer = AutoProcessor.from_pretrained("facebook/mms-tts-pan")
 translator = Translator()
@@ -44,10 +39,6 @@ id2label = {
 def perform_inference(image, threshold=0.5):  # Threshold can be tuned
 
     inputs = processor(images=image, return_tensors="pt")
-    print("Before moving inputs to device:")
-    for key in inputs:
-        inputs[key] = inputs[key].to(device)
-
     with torch.no_grad():
         outputs = model(**inputs)
         predictions = torch.nn.functional.softmax(outputs.logits, dim=-1)

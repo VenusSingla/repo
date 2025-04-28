@@ -144,14 +144,13 @@ if uploaded_file is not None:
             st.info(f"Punjabi Translation: {punjabi_translation}")
             generate_speech_disabled = False
         if st.button("Generate Speech", disabled=generate_speech_disabled):
-        # Generate speech for "Not recognized" in Punjabi if unknown or low confidence
-        if predicted_label == "Not Recognized":
-            unknown_text = "Not recognized sign"  # Or the Punjabi text: "ਪਛਾਣਿਆ ਨਹੀਂ ਗਿਆ"
-            audio_file = generate_audio(unknown_text)
-        else:
-            audio_file = generate_audio(punjabi_translation)
-        st.audio(audio_file, format="audio/wav")
-        st.success("Audio generated successfully!")
+		if predicted_label == "Not Recognized":
+			unknown_text = "Not recognized sign"  # Or the Punjabi text: "ਪਛਾਣਿਆ ਨਹੀਂ ਗਿਆ
+			audio_file = generate_audio(unknown_text)
+		else:
+			audio_file = generate_audio(punjabi_translation)
+			st.audio(audio_file, format="audio/wav")
+			st.success("Audio generated successfully!")
 
     except Exception as e:
         st.error(f"An error occurred while processing the image: {str(e)}")

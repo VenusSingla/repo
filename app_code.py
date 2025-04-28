@@ -14,8 +14,7 @@ print(f"Using device: {device}")
 model = ViTForImageClassification.from_pretrained("vsingla/isl_trainer")
 processor = ViTFeatureExtractor.from_pretrained("vsingla/isl_trainer")
 
-# Debug: Ensure the model is on the correct device
-print(f"Model is on device: {next(model.parameters()).device}")
+
 
 model_speech = VitsModel.from_pretrained("facebook/mms-tts-pan")
 tokenizer = AutoProcessor.from_pretrained("facebook/mms-tts-pan")

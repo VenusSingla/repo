@@ -47,6 +47,7 @@ def draw_landmarks(image, landmarks):
     return image
 
 # Inference function
+# Inference function
 async def perform_inference(image, threshold=0.3):  # Threshold can be tuned
     try:
         # Ensure the image is in RGB mode (convert if necessary)
@@ -63,8 +64,10 @@ async def perform_inference(image, threshold=0.3):  # Threshold can be tuned
             predicted_probs, predicted_index = torch.max(predictions, dim=1)
             predicted_index = predicted_index.item()
             confidence = predicted_probs.item()
+        
         if confidence < threshold:
-            return "Not Recognized", "ਪਛਾਣਿਆ ਨਹੀਂ ਗਿਆ"
+            # Return a tuple with None for landmarks when not recognized
+            return "Not Recognized", "ਪਛਾਣਿਆ ਨਹੀਂ ਗਿਆ", []
         else:
             predicted_label = id2label.get(str(predicted_index), "Unknown")
             translation = translator.translate(predicted_label, src='en', dest='pa')
@@ -72,7 +75,7 @@ async def perform_inference(image, threshold=0.3):  # Threshold can be tuned
             return predicted_label, translation.text, landmarks
     except Exception as e:
         print(f"Error during inference: {str(e)}")  # Log the error
-        return "Error", str(e), []
+        return "Error", str(e), []  # Return an empty list for landmarks in case of error
 
 # Function to generate audio
 def generate_audio(text):

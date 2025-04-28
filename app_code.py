@@ -4,7 +4,7 @@ import numpy as np
 import torch
 import asyncio
 from PIL import Image
-from transformers import ViTForImageClassification, ViTFeatureExtractor, VitsModel, AutoTokenizer
+from transformers import AutoProcessor, ViTForImageClassification, ViTFeatureExtractor, VitsModel, AutoTokenizer
 from googletrans import Translator
 import tempfile
 

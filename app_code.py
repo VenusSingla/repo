@@ -173,7 +173,7 @@ if st.session_state.latest_image is not None:
         st.image(image, caption="Processed Image", use_container_width=True)
 
         # Perform inference
-        predicted_label, punjabi_translation, landmarks = asyncio.run(perform_inference(image, threshold=threshold))
+        predicted_label, punjabi_translation, landmarks = asyncio.run(perform_inference(image))
 
         if landmarks:
             image_with_landmarks = draw_landmarks(image.copy(), landmarks)

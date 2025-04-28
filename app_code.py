@@ -38,6 +38,9 @@ id2label = {
 }
 async def perform_inference(image, threshold=0.5):  # Threshold can be tuned
     inputs = processor(images=image, return_tensors="pt")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
+    inputs = {k: v.to(device) for k, v in inputs.items()}
     with torch.no_grad():
         outputs = model(**inputs)
         predictions = torch.nn.functional.softmax(outputs.logits, dim=-1)

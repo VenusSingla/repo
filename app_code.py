@@ -9,7 +9,7 @@ from googletrans import Translator
 import tempfile
 
 # Load models
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cpu")
 model = ViTForImageClassification.from_pretrained("vsingla/isl_trainer")
 processor = ViTFeatureExtractor.from_pretrained("vsingla/isl_trainer")
 model_speech = VitsModel.from_pretrained("facebook/mms-tts-pan")

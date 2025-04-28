@@ -43,7 +43,7 @@ id2label = {
     '122': 'WATER', '123': 'WEAR', '124': 'WELCOME', '125': 'WHAT', '126': 'WHERE', '127': 'WHO', '128': 'WORRY', '129': 'YOU_YOUR'
 }
 def perform_inference(image, threshold=0.5):  # Threshold can be tuned
-    model.eval() 
+
     inputs = processor(images=image, return_tensors="pt")
     print("Before moving inputs to device:")
     for k, v in inputs.items():

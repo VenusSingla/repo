@@ -58,10 +58,6 @@ async def perform_inference(image, threshold=0.3):  # Threshold can be tuned
             predicted_probs, predicted_index = torch.max(predictions, dim=1)
             predicted_index = predicted_index.item()
             confidence = predicted_probs.item()
-         if landmarks:
-            image_with_landmarks = draw_landmarks(image.copy(), landmarks)
-            st.image(image_with_landmarks, caption="Image with Landmarks", use_container_width=True)
-
         if confidence < threshold:
             return "Not Recognized", "ਪਛਾਣਿਆ ਨਹੀਂ ਗਿਆ"
         else:
@@ -124,7 +120,10 @@ if uploaded_file is not None:
         st.image(image, caption="Processed Image", use_container_width=True)
         
         # Perform inference once
-        predicted_label, punjabi_translation = asyncio.run(perform_inference(image))
+        predicted_label, punjabi_translation,landmarks = asyncio.run(perform_inference(image))
+         if landmarks:
+            image_with_landmarks = draw_landmarks(image.copy(), landmarks)
+            st.image(image_with_landmarks, caption="Image with Landmarks", use_container_width=True)
 
         if predicted_label == "Not Recognized":
             st.error("Not recognized sign")

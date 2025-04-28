@@ -36,6 +36,12 @@ id2label = {
     '115': 'TODAY', '116': 'TRAIN', '117': 'TRUST', '118': 'TRUTH', '119': 'TURN_ON', '120': 'UNDERSTAND', '121': 'WANT',
     '122': 'WATER', '123': 'WEAR', '124': 'WELCOME', '125': 'WHAT', '126': 'WHERE', '127': 'WHO', '128': 'WORRY', '129': 'YOU_YOUR'
 }
+def draw_landmarks(image, landmarks):
+    draw = ImageDraw.Draw(image)
+    for (x, y) in landmarks:
+        # Draw a red circle at each landmark point
+        draw.ellipse([(x - 5, y - 5), (x + 5, y + 5)], fill='red', outline='red')
+    return image
 async def perform_inference(image, threshold=0.3):  # Threshold can be tuned
     try:
         # Ensure the image is in RGB mode (convert if necessary)
@@ -52,6 +58,9 @@ async def perform_inference(image, threshold=0.3):  # Threshold can be tuned
             predicted_probs, predicted_index = torch.max(predictions, dim=1)
             predicted_index = predicted_index.item()
             confidence = predicted_probs.item()
+         if landmarks:
+            image_with_landmarks = draw_landmarks(image.copy(), landmarks)
+            st.image(image_with_landmarks, caption="Image with Landmarks", use_container_width=True)
 
         if confidence < threshold:
             return "Not Recognized", "ਪਛਾਣਿਆ ਨਹੀਂ ਗਿਆ"

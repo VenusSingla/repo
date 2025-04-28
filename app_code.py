@@ -43,9 +43,23 @@ id2label = {
     '122': 'WATER', '123': 'WEAR', '124': 'WELCOME', '125': 'WHAT', '126': 'WHERE', '127': 'WHO', '128': 'WORRY', '129': 'YOU_YOUR'
 }
 def perform_inference(image, threshold=0.5):  # Threshold can be tuned
-    #model.eval() 
+    model.eval() 
     inputs = processor(images=image, return_tensors="pt")
-    #inputs = {k: v.to(device) for k, v in inputs.items()}
+    print("Before moving inputs to device:")
+    for k, v in inputs.items():
+        print(f"{k}: {v.device}")
+
+    # Ensure each input tensor is moved to the same device as the model
+    if 'pixel_values' in inputs:
+        inputs['pixel_values'] = inputs['pixel_values'].to(device)
+    if 'attention_mask' in inputs:
+        inputs['attention_mask'] = inputs['attention_mask'].to(device)
+
+    # Debug: Check devices after moving to the correct device
+    print("After moving inputs to device:")
+    for k, v in inputs.items():
+        print(f"{k}: {v.device}")
+
     with torch.no_grad():
         outputs = model(**inputs)
         predictions = torch.nn.functional.softmax(outputs.logits, dim=-1)

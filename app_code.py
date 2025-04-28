@@ -3,10 +3,11 @@ import cv2
 import numpy as np
 import torch
 import asyncio
-from PIL import Image
+from PIL import Image, ImageDraw
 from transformers import AutoProcessor, ViTForImageClassification, ViTFeatureExtractor, VitsModel, AutoTokenizer
 from googletrans import Translator
 import tempfile
+from scipy.io.wavfile import write
 
 # Load models
 model = ViTForImageClassification.from_pretrained("vsingla/isl_trainer")
@@ -36,12 +37,16 @@ id2label = {
     '115': 'TODAY', '116': 'TRAIN', '117': 'TRUST', '118': 'TRUTH', '119': 'TURN_ON', '120': 'UNDERSTAND', '121': 'WANT',
     '122': 'WATER', '123': 'WEAR', '124': 'WELCOME', '125': 'WHAT', '126': 'WHERE', '127': 'WHO', '128': 'WORRY', '129': 'YOU_YOUR'
 }
+
+# Function to draw landmarks on image
 def draw_landmarks(image, landmarks):
     draw = ImageDraw.Draw(image)
     for (x, y) in landmarks:
         # Draw a red circle at each landmark point
         draw.ellipse([(x - 5, y - 5), (x + 5, y + 5)], fill='red', outline='red')
     return image
+
+# Inference function
 async def perform_inference(image, threshold=0.3):  # Threshold can be tuned
     try:
         # Ensure the image is in RGB mode (convert if necessary)
@@ -68,9 +73,8 @@ async def perform_inference(image, threshold=0.3):  # Threshold can be tuned
     except Exception as e:
         print(f"Error during inference: {str(e)}")  # Log the error
         return "Error", str(e)
-        
-from scipy.io.wavfile import write
 
+# Function to generate audio
 def generate_audio(text):
     inputs = tokenizer(text, return_tensors="pt")
     
@@ -97,6 +101,7 @@ if "latest_image" not in st.session_state:
     st.session_state.latest_image = None
 if "show_camera" not in st.session_state:
     st.session_state.show_camera = False
+
 # Camera + Cancel buttons
 col1, col2 = st.columns([1, 1])
 with col1:
@@ -158,16 +163,17 @@ elif st.session_state.show_camera:
 elif st.session_state.show_camera is False:
     if uploaded_file is not None and st.session_state.latest_image is None:
         st.session_state.latest_image = uploaded_file
+
 # Process the latest image
 elif st.session_state.latest_image is not None:
     image = Image.open(st.session_state.latest_image)
     st.image(image, caption="Processed Image", use_container_width=True)
     # Perform inference only once
     predicted_label, punjabi_translation, landmarks = asyncio.run(perform_inference(image))
-	if landmarks:
-            image_with_landmarks = draw_landmarks(image.copy(), landmarks)
-            st.image(image_with_landmarks, caption="Image with Landmarks", use_container_width=True)
-    
+    if landmarks:
+        image_with_landmarks = draw_landmarks(image.copy(), landmarks)
+        st.image(image_with_landmarks, caption="Image with Landmarks", use_container_width=True)
+
     if predicted_label == "Not Recognized":
         st.error("Not recognized sign")
         st.info(f"Punjabi Translation: {punjabi_translation}")
@@ -178,12 +184,13 @@ elif st.session_state.latest_image is not None:
         generate_speech_disabled = False
 
 if st.button("Generate Speech", disabled=generate_speech_disabled):
-        # Generate speech for "Not recognized" in Punjabi if unknown or low confidence
-	if predicted_label == "Not Recognized":
-		unknown_text = "Not recognized sign"  # Or the Punjabi text: "ਪਛਾਣਿਆ ਨਹੀਂ ਗਿਆ"
-		audio_file = generate_audio(unknown_text)
-        else:
-		audio_file = generate_audio(punjabi_translation)
-		st.audio(audio_file, format="audio/wav")
-		st.success("Audio generated successfully!")
-    st.session_state.latest_image = None
+    # Generate speech for "Not recognized" in Punjabi if unknown or low confidence
+    if predicted_label == "Not Recognized":
+        unknown_text = "Not recognized sign"  # Or the Punjabi text: "ਪਛਾਣਿਆ ਨਹੀਂ ਗਿਆ"
+        audio_file = generate_audio(unknown_text)
+    else:
+        audio_file = generate_audio(punjabi_translation)
+    st.audio(audio_file, format="audio/wav")
+    st.success("Audio generated successfully!")
+    
+st.session_state.latest_image = None

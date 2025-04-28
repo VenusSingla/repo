@@ -9,14 +9,10 @@ from googletrans import Translator
 import tempfile
 
 # Load models
-device = torch.device("cpu")
 model = ViTForImageClassification.from_pretrained("vsingla/isl_trainer")
 processor = ViTFeatureExtractor.from_pretrained("vsingla/isl_trainer")
 model_speech = VitsModel.from_pretrained("facebook/mms-tts-pan")
-tokenizer = AutoProcessor.from_pretrained("facebook/mms-tts-pan")
-model.to(device)
-model_speech.to(device)
-
+tokenizer = AutoTokenizer.from_pretrained("facebook/mms-tts-pan")
 translator = Translator()
 
 # Label mapping

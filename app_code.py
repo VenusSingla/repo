@@ -91,11 +91,21 @@ def generate_audio(text):
 st.set_page_config(page_title="ISL to Punjabi Translator", layout="centered")
 st.title("🖐️ Sanket2Shabd")
 st.write("Upload an image or capture from webcam")
+
 # Session states
 if "latest_image" not in st.session_state:
     st.session_state.latest_image = None
 if "show_camera" not in st.session_state:
     st.session_state.show_camera = False
+# Camera + Cancel buttons
+col1, col2 = st.columns([1, 1])
+with col1:
+    if st.button("📷 Capture Image"):
+        st.session_state.show_camera = True
+with col2:
+    if st.session_state.show_camera:
+        if st.button("❌ Cancel Capture"):
+            st.rerun()
 
 # Upload input
 MAX_FILE_SIZE = 200 * 1024 * 1024  # 200 MB
@@ -120,7 +130,7 @@ if uploaded_file is not None:
         st.image(image, caption="Processed Image", use_container_width=True)
         
         # Perform inference once
-        predicted_label, punjabi_translation,landmarks = asyncio.run(perform_inference(image))
+        predicted_label, punjabi_translation, landmarks = asyncio.run(perform_inference(image))
         if landmarks:
             image_with_landmarks = draw_landmarks(image.copy(), landmarks)
             st.image(image_with_landmarks, caption="Image with Landmarks", use_container_width=True)
@@ -133,40 +143,43 @@ if uploaded_file is not None:
             st.success(f"Predicted: {predicted_label}")
             st.info(f"Punjabi Translation: {punjabi_translation}")
             generate_speech_disabled = False
+			if st.button("Generate Speech", disabled=generate_speech_disabled):
+        # Generate speech for "Not recognized" in Punjabi if unknown or low confidence
+        if predicted_label == "Not Recognized":
+            unknown_text = "Not recognized sign"  # Or the Punjabi text: "ਪਛਾਣਿਆ ਨਹੀਂ ਗਿਆ"
+            audio_file = generate_audio(unknown_text)
+        else:
+            audio_file = generate_audio(punjabi_translation)
+        st.audio(audio_file, format="audio/wav")
+        st.success("Audio generated successfully!")
 
     except Exception as e:
         st.error(f"An error occurred while processing the image: {str(e)}")
         print(f"Error: {str(e)}")
     
     st.session_state.latest_image = uploaded_file
-# Camera + Cancel buttons
-col1, col2 = st.columns([1, 1])
-with col1:
-    if st.button("📷 Capture Image"):
-        st.session_state.show_camera = True
-with col2:
-    if st.session_state.show_camera:
-        if st.button("❌ Cancel Capture"):
             st.session_state.show_camera = False
-            st.rerun()
 
 # Camera input
-if st.session_state.show_camera:
+elif st.session_state.show_camera:
     capture_image = st.camera_input("Take a Picture")
     if capture_image is not None:
         st.session_state.latest_image = capture_image
         st.session_state.show_camera = False
 
 # Save uploaded image if no capture
-if st.session_state.show_camera is False:
+elif st.session_state.show_camera is False:
     if uploaded_file is not None and st.session_state.latest_image is None:
         st.session_state.latest_image = uploaded_file
 # Process the latest image
-if st.session_state.latest_image is not None:
+elif st.session_state.latest_image is not None:
     image = Image.open(st.session_state.latest_image)
     st.image(image, caption="Processed Image", use_container_width=True)
     # Perform inference only once
-    predicted_label, punjabi_translation = asyncio.run(perform_inference(image))
+    predicted_label, punjabi_translation, landmarks = asyncio.run(perform_inference(image))
+	if landmarks:
+            image_with_landmarks = draw_landmarks(image.copy(), landmarks)
+            st.image(image_with_landmarks, caption="Image with Landmarks", use_container_width=True)
     
     if predicted_label == "Not Recognized":
         st.error("Not recognized sign")

@@ -11,6 +11,21 @@ from scipy.io.wavfile import write
 import pandas as pd
 from datetime import datetime
 st.set_page_config(page_title="ISL to Punjabi Translator", layout="centered")
+import gspread
+from google.oauth2.service_account import Credentials
+
+SERVICE_ACCOUNT_FILE = "Credentials.json"
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+
+credentials = Credentials.from_service_account_file(
+    SERVICE_ACCOUNT_FILE,
+    scopes=SCOPES,
+)
+gc = gspread.authorize(credentials)
+spreadsheet_url = "https://script.google.com/a/macros/thapar.edu/s/AKfycbzBnlbsz0zMr_563kR8b50nnP7_vLieLsupqNsBWCUdo6dQ5JBpwwGxiXTlPj1fB8ezIw/exec"
+sh = gc.open_by_url(spreadsheet_url)
+worksheet = sh.sheet1
+
 st.title("🖐️ Sanket2Shabd")
 predicted_label = ""
 punjabi_translation = ""
@@ -249,53 +264,16 @@ elif st.session_state.show_camera:
 if st.session_state.show_feedback:
     st.write("### Provide Feedback")
     feedback = st.radio("How accurate is the prediction?", ["👍 Correct", "👎 Incorrect"])
-import gspread
-from google.oauth2.service_account import Credentials
-
-# Path to your downloaded service account json file
-SERVICE_ACCOUNT_FILE = "Credentials.json"
-
-# Define the scope
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-
-# Authenticate and create the client
-credentials = Credentials.from_service_account_file(
-    SERVICE_ACCOUNT_FILE,
-    scopes=SCOPES,
-)
-
-gc = gspread.authorize(credentials)
-
-# Open the Google Sheet by URL or name
-spreadsheet_url = "https://docs.google.com/spreadsheets/d/1LGE-H0B9XkJA9UJHrczkijqSn9TGm2YSfE1_jD-mvfk/edit"
-sh = gc.open_by_url(spreadsheet_url)
-
-# Select worksheet by name or index (default first sheet)
-worksheet = sh.sheet1
-
-# Function to append feedback data to the sheet
-def append_feedback_to_sheet(data_dict):
-    # Data dict keys: Timestamp, Predicted_Label, Punjabi_Translation, Confidence, Feedback
-    row = [
-        data_dict.get("Timestamp", ""),
-        data_dict.get("Predicted_Label", ""),
-        data_dict.get("Punjabi_Translation", ""),
-        str(data_dict.get("Confidence", "")),
-        data_dict.get("Feedback", "")
-    ]
-    worksheet.append_row(row)
-#########################################################333
     if st.button("Submit Feedback"):
-        feedback_data = {
-            "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "Predicted_Label": predicted_label,
-            "Punjabi_Translation": punjabi_translation,
-            "Confidence": confidence,
-            "Feedback": feedback
-        }
-        
         try:
-            append_feedback_to_sheet(feedback_data)
-            st.success("Feedback submitted successfully!!")
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            feedback_text = "Correct" if feedback == "👍 Correct" else "Incorrect"
+
+            # Prepare row data
+            row = [timestamp, predicted_label, punjabi_translation, round(confidence, 3), feedback_text]
+
+            # Append to Google Sheet
+            worksheet.append_row(row)
+            st.success("Feedback submitted and logged to Google Sheets.")
         except Exception as e:
-            st.error(f"Failed to submit feedback: {e}")
+            st.error(f"Error submitting to Google Sheets: {str(e)}")

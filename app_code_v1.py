@@ -288,16 +288,16 @@ def append_feedback_to_sheet(data_dict):
     worksheet.append_row(row)
 #########################################################333
     if st.button("Submit Feedback"):
-    feedback_data = {
-        "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "Predicted_Label": predicted_label,
-        "Punjabi_Translation": punjabi_translation,
-        "Confidence": confidence,
-        "Feedback": feedback
-    }
-    
-    try:
-        append_feedback_to_sheet(feedback_data)
-        st.success("Feedback submitted successfully!!")
-    except Exception as e:
-        st.error(f"Failed to submit feedback: {e}")
+        feedback_data = {
+            "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "Predicted_Label": predicted_label,
+            "Punjabi_Translation": punjabi_translation,
+            "Confidence": confidence,
+            "Feedback": feedback
+        }
+        
+        try:
+            append_feedback_to_sheet(feedback_data)
+            st.success("Feedback submitted successfully!!")
+        except Exception as e:
+            st.error(f"Failed to submit feedback: {e}")

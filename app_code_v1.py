@@ -230,16 +230,14 @@ if st.session_state.show_feedback:
         }
         
         feedback_df = pd.DataFrame(feedback_data)
-        
-        excel_file = "feedback_data.xlsx"
-        
-        # Check if the file exists
+        csv_file = "feedback_data.csv"
+
+        # Check if file exists and append, else create
         try:
-            existing_df = pd.read_excel(excel_file)
+            existing_df = pd.read_csv(csv_file)
             final_df = pd.concat([existing_df, feedback_df], ignore_index=True)
         except FileNotFoundError:
             final_df = feedback_df
-        
-        # Save to Excel
-        final_df.to_excel(excel_file, index=False)
+
+        final_df.to_csv(csv_file, index=False)
         st.success("Feedback submitted successfully!")

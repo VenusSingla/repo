@@ -253,7 +253,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 # Path to your downloaded service account json file
-SERVICE_ACCOUNT_FILE = "Feedback Sheet.json"
+SERVICE_ACCOUNT_FILE = "Credentials.json"
 
 # Define the scope
 SCOPES = ['https://www.googleapis.com/auth/spreadsheets']

@@ -5,4 +5,5 @@ Pillow
 googletrans==4.0.0rc1
 scipy
 opencv-python-headless
-gspread google-auth
+gspread 
+google-auth

@@ -11,6 +11,9 @@ from scipy.io.wavfile import write
 import pandas as pd
 from datetime import datetime
 
+predicted_label = ""
+punjabi_translation = ""
+confidence = 0.0
 @st.cache_resource
 def load_models():
     model = ViTForImageClassification.from_pretrained("vsingla/isl_trainer")

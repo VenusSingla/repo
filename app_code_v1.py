@@ -85,8 +85,8 @@ async def perform_inference(image, threshold=0.6, batch_size=5):
         else:
             predicted_label = id2label.get(str(predicted_index), "Unknown")
             translation = translator.translate(predicted_label, src='en', dest='pa')
-            landmarks = [(100, 150), (200, 250), (300, 350)]  # Dummy landmarks
-            return predicted_label, translation.text, landmarks, confidence
+            # landmarks = []  # Skip dummy landmarks for clarity
+            return predicted_label, translation.text, [], confidence
 
     except Exception as e:
         print(f"Error during inference: {str(e)}")
@@ -136,86 +136,115 @@ with col2:
             st.rerun()
 st.sidebar.header("Settings")
 threshold = st.sidebar.slider("Prediction Confidence Threshold", 0.3, 0.9, 0.6)
-# Upload input
-MAX_FILE_SIZE = 200 * 1024 * 1024  # 200 MB
-MAX_DIMENSION = 2000  # Max image dimension (you can adjust this)
 generate_speech_disabled = True
+# Upload input
+# MAX_FILE_SIZE = 200 * 1024 * 1024  # 200 MB
+# MAX_DIMENSION = 2000  # Max image dimension (you can adjust this)
+
 uploaded_file = st.file_uploader("📁 Upload Image", type=["jpg", "png", "jpeg"])
 if uploaded_file is not None:
     try:
         image = Image.open(uploaded_file)
-        
-        # Check image size (in MB) and resize if necessary
-        file_size = uploaded_file.size  # in bytes
-        if file_size > MAX_FILE_SIZE:
-            st.warning(f"Image is too large. Resizing it to fit within the size limit of 200MB.")
-            # Resize image to fit within the max file size limit
-            image = image.resize((MAX_DIMENSION, MAX_DIMENSION), Image.ANTIALIAS)
-        
-        # Ensure image is in RGB mode before processing
+        if uploaded_file.size > 200 * 1024 * 1024:
+            st.warning("Image is too large. Resizing to fit within 200MB limit.")
+            image = image.resize((2000, 2000), Image.ANTIALIAS)
         if image.mode != 'RGB':
             image = image.convert('RGB')
         st.image(image, caption="Processed Image", use_container_width=True)
-        # Perform inference once
         predicted_label, punjabi_translation, landmarks, confidence = asyncio.run(perform_inference(image, threshold=threshold))
-
-        if landmarks:  # Check if landmarks are present
+        if landmarks:
             image_with_landmarks = draw_landmarks(image.copy(), landmarks)
             st.image(image_with_landmarks, caption="Image with Landmarks", use_container_width=True)
-        else:
-            st.warning("No landmarks to display.")
-
         if predicted_label == "Not Recognized":
             st.error("Not recognized sign")
-            st.info(f"Punjabi Translation: {punjabi_translation}")
-            generate_speech_disabled = True
         else:
             st.success(f"Predicted: {predicted_label}")
-            st.info(f"Punjabi Translation: {punjabi_translation}")
-            generate_speech_disabled = False
+        st.info(f"Punjabi Translation: {punjabi_translation}")
+        st.session_state.latest_image = uploaded_file
+        st.session_state.show_feedback = True
     except Exception as e:
-        st.error(f"An error occurred while processing the image: {str(e)}")
-        print(f"Error: {str(e)}") 
-    
-    st.session_state.latest_image = uploaded_file
-
+        st.error(f"Error processing image: {str(e)}")
+        print(f"Error: {str(e)}")
 elif st.session_state.show_camera:
     capture_image = st.camera_input("Take a Picture")
     if capture_image is not None:
         st.session_state.latest_image = capture_image
         st.session_state.show_camera = False
+# if uploaded_file is not None:
+#     try:
+#         image = Image.open(uploaded_file)
+        
+#         # Check image size (in MB) and resize if necessary
+#         file_size = uploaded_file.size  # in bytes
+#         if file_size > MAX_FILE_SIZE:
+#             st.warning(f"Image is too large. Resizing it to fit within the size limit of 200MB.")
+#             # Resize image to fit within the max file size limit
+#             image = image.resize((MAX_DIMENSION, MAX_DIMENSION), Image.ANTIALIAS)
+        
+#         # Ensure image is in RGB mode before processing
+#         if image.mode != 'RGB':
+#             image = image.convert('RGB')
+#         st.image(image, caption="Processed Image", use_container_width=True)
+#         # Perform inference once
+#         predicted_label, punjabi_translation, landmarks, confidence = asyncio.run(perform_inference(image, threshold=threshold))
 
-# Process latest image if available
-if st.session_state.latest_image is not None:
-    try:
-        # Important: properly open the uploaded/captured file as image
-        image = Image.open(st.session_state.latest_image)
-        if image.mode != 'RGB':
-            image = image.convert('RGB')
-        st.image(image, caption="Processed Image", use_container_width=True)
+#         if landmarks:  # Check if landmarks are present
+#             image_with_landmarks = draw_landmarks(image.copy(), landmarks)
+#             st.image(image_with_landmarks, caption="Image with Landmarks", use_container_width=True)
+#         else:
+#             st.warning("No landmarks to display.")
 
-        # Perform inference
-        predicted_label, punjabi_translation, landmarks, confidence = asyncio.run(perform_inference(image, threshold=threshold))
+#         if predicted_label == "Not Recognized":
+#             st.error("Not recognized sign")
+#             st.info(f"Punjabi Translation: {punjabi_translation}")
+#             generate_speech_disabled = True
+#         else:
+#             st.success(f"Predicted: {predicted_label}")
+#             st.info(f"Punjabi Translation: {punjabi_translation}")
+#             generate_speech_disabled = False
+#     except Exception as e:
+#         st.error(f"An error occurred while processing the image: {str(e)}")
+#         print(f"Error: {str(e)}") 
+    
+#     st.session_state.latest_image = uploaded_file
 
-        if landmarks:
-            image_with_landmarks = draw_landmarks(image.copy(), landmarks)
-            st.image(image_with_landmarks, caption="Image with Landmarks", use_container_width=True)
+# elif st.session_state.show_camera:
+#     capture_image = st.camera_input("Take a Picture")
+#     if capture_image is not None:
+#         st.session_state.latest_image = capture_image
+#         st.session_state.show_camera = False
 
-        if predicted_label == "Not Recognized":
-            st.error("Not recognized sign")
-            st.info(f"Punjabi Translation: {punjabi_translation}")
-            generate_speech_disabled = True
-        else:
-            st.success(f"Predicted: {predicted_label}")
-            st.info(f"Punjabi Translation: {punjabi_translation}")
-            generate_speech_disabled = False
+# # Process latest image if available
+# if st.session_state.latest_image is not None:
+#     try:
+#         # Important: properly open the uploaded/captured file as image
+#         image = Image.open(st.session_state.latest_image)
+#         if image.mode != 'RGB':
+#             image = image.convert('RGB')
+#         st.image(image, caption="Processed Image", use_container_width=True)
 
-    except Exception as e:
-        st.error(f"An error occurred while processing the image: {str(e)}")
-        print(f"Error: {str(e)}")
+#         # Perform inference
+#         predicted_label, punjabi_translation, landmarks, confidence = asyncio.run(perform_inference(image, threshold=threshold))
 
-    st.session_state.latest_image = None  # Reset after processing
-    st.session_state.show_feedback = True
+#         if landmarks:
+#             image_with_landmarks = draw_landmarks(image.copy(), landmarks)
+#             st.image(image_with_landmarks, caption="Image with Landmarks", use_container_width=True)
+
+#         if predicted_label == "Not Recognized":
+#             st.error("Not recognized sign")
+#             st.info(f"Punjabi Translation: {punjabi_translation}")
+#             generate_speech_disabled = True
+#         else:
+#             st.success(f"Predicted: {predicted_label}")
+#             st.info(f"Punjabi Translation: {punjabi_translation}")
+#             generate_speech_disabled = False
+
+#     except Exception as e:
+#         st.error(f"An error occurred while processing the image: {str(e)}")
+#         print(f"Error: {str(e)}")
+
+#     st.session_state.latest_image = None  # Reset after processing
+#     st.session_state.show_feedback = True
 # ---------------- Feedback at bottom ----------------
 if st.session_state.show_feedback:
     st.write("### Provide Feedback")

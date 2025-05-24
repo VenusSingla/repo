@@ -8,6 +8,8 @@ from transformers import AutoProcessor, ViTForImageClassification, ViTFeatureExt
 from googletrans import Translator
 import tempfile
 from scipy.io.wavfile import write
+import pandas as pd
+from datetime import datetime
 
 @st.cache_resource
 def load_models():
@@ -216,29 +218,25 @@ if st.session_state.show_feedback:
     st.write("### Provide Feedback")
     feedback = st.radio("How accurate is the prediction?", ["👍 Correct", "👎 Incorrect"])
     if st.button("Submit Feedback"):
-    # Save feedback to Excel
-    import pandas as pd
-    from datetime import datetime
-    
-    feedback_data = {
-        "Timestamp": [datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
-        "Predicted_Label": [predicted_label],
-        "Punjabi_Translation": [punjabi_translation],
-        "Confidence": [confidence],
-        "Feedback": [feedback]
-    }
-    
-    feedback_df = pd.DataFrame(feedback_data)
-    
-    excel_file = "feedback_data.xlsx"
-    
-    # Check if the file exists
-    try:
-        existing_df = pd.read_excel(excel_file)
-        final_df = pd.concat([existing_df, feedback_df], ignore_index=True)
-    except FileNotFoundError:
-        final_df = feedback_df
-    
-    # Save to Excel
-    final_df.to_excel(excel_file, index=False)
-    st.success("Feedback submitted successfully!")
+        feedback_data = {
+            "Timestamp": [datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
+            "Predicted_Label": [predicted_label],
+            "Punjabi_Translation": [punjabi_translation],
+            "Confidence": [confidence],
+            "Feedback": [feedback]
+        }
+        
+        feedback_df = pd.DataFrame(feedback_data)
+        
+        excel_file = "feedback_data.xlsx"
+        
+        # Check if the file exists
+        try:
+            existing_df = pd.read_excel(excel_file)
+            final_df = pd.concat([existing_df, feedback_df], ignore_index=True)
+        except FileNotFoundError:
+            final_df = feedback_df
+        
+        # Save to Excel
+        final_df.to_excel(excel_file, index=False)
+        st.success("Feedback submitted successfully!")

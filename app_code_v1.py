@@ -112,7 +112,8 @@ def generate_audio(text):
 st.set_page_config(page_title="ISL to Punjabi Translator", layout="centered")
 st.title("🖐️ Sanket2Shabd")
 st.write("Upload an image or capture from webcam")
-
+if "show_feedback" not in st.session_state:
+    st.session_state.show_feedback = False
 # Session states
 if "latest_image" not in st.session_state:
     st.session_state.latest_image = None
@@ -209,14 +210,16 @@ if st.session_state.latest_image is not None:
         print(f"Error: {str(e)}")
 
     st.session_state.latest_image = None  # Reset after processing
+    st.session_state.show_feedback = True
 # ---------------- Feedback at bottom ----------------
-st.write("### Provide Feedback")
-feedback = st.radio("How accurate is the prediction?", ["👍 Correct", "👎 Incorrect"])
-if st.button("Submit Feedback"):
+if st.session_state.show_feedback:
+    st.write("### Provide Feedback")
+    feedback = st.radio("How accurate is the prediction?", ["👍 Correct", "👎 Incorrect"])
+    if st.button("Submit Feedback"):
     # Save feedback to Excel
     import pandas as pd
     from datetime import datetime
-
+    
     feedback_data = {
         "Timestamp": [datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
         "Predicted_Label": [predicted_label],
@@ -224,18 +227,18 @@ if st.button("Submit Feedback"):
         "Confidence": [confidence],
         "Feedback": [feedback]
     }
-
+    
     feedback_df = pd.DataFrame(feedback_data)
-
+    
     excel_file = "feedback_data.xlsx"
-
+    
     # Check if the file exists
     try:
         existing_df = pd.read_excel(excel_file)
         final_df = pd.concat([existing_df, feedback_df], ignore_index=True)
     except FileNotFoundError:
         final_df = feedback_df
-
+    
     # Save to Excel
     final_df.to_excel(excel_file, index=False)
     st.success("Feedback submitted successfully!")

@@ -10,7 +10,8 @@ import tempfile
 from scipy.io.wavfile import write
 import pandas as pd
 from datetime import datetime
-
+st.set_page_config(page_title="ISL to Punjabi Translator", layout="centered")
+st.title("🖐️ Sanket2Shabd")
 predicted_label = ""
 punjabi_translation = ""
 confidence = 0.0
@@ -113,9 +114,6 @@ def generate_audio(text):
     return audio_filename
 
 # ------------------ Streamlit UI ------------------
-
-st.set_page_config(page_title="ISL to Punjabi Translator", layout="centered")
-st.title("🖐️ Sanket2Shabd")
 st.write("Upload an image or capture from webcam")
 if "show_feedback" not in st.session_state:
     st.session_state.show_feedback = False

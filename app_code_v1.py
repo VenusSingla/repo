@@ -13,10 +13,7 @@ from datetime import datetime
 st.set_page_config(page_title="ISL to Punjabi Translator", layout="centered")
 import gspread
 from google.oauth2.service_account import Credentials
-
-spreadsheet_url = "https://script.google.com/a/macros/thapar.edu/s/AKfycbzBnlbsz0zMr_563kR8b50nnP7_vLieLsupqNsBWCUdo6dQ5JBpwwGxiXTlPj1fB8ezIw/exec"
-sh = gc.open_by_url(spreadsheet_url)
-worksheet = sh.sheet1
+worksheet = "https://script.google.com/a/macros/thapar.edu/s/AKfycbzBnlbsz0zMr_563kR8b50nnP7_vLieLsupqNsBWCUdo6dQ5JBpwwGxiXTlPj1fB8ezIw/exec"
 
 st.title("🖐️ Sanket2Shabd")
 predicted_label = ""

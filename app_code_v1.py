@@ -20,7 +20,7 @@ scope = [
 ]
 creds = Credentials.from_service_account_info(
     st.secrets["gcp"],
-    scopes=scopes
+    scopes=scope
 )
 client = gspread.authorize(credentials)
 worksheet = client.open("ISL Feedback").sheet1  # You can also use .worksheet("Sheet1")

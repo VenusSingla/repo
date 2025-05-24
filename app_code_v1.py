@@ -246,27 +246,58 @@ elif st.session_state.show_camera:
 #     st.session_state.latest_image = None  # Reset after processing
 #     st.session_state.show_feedback = True
 # ---------------- Feedback at bottom ----------------
+
+
 if st.session_state.show_feedback:
     st.write("### Provide Feedback")
     feedback = st.radio("How accurate is the prediction?", ["👍 Correct", "👎 Incorrect"])
+import gspread
+from google.oauth2.service_account import Credentials
+
+# Path to your downloaded service account json file
+SERVICE_ACCOUNT_FILE = "Feedback Sheet.json"
+
+# Define the scope
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+
+# Authenticate and create the client
+credentials = Credentials.from_service_account_file(
+    SERVICE_ACCOUNT_FILE,
+    scopes=SCOPES,
+)
+
+gc = gspread.authorize(credentials)
+
+# Open the Google Sheet by URL or name
+spreadsheet_url = "https://docs.google.com/spreadsheets/d/1LGE-H0B9XkJA9UJHrczkijqSn9TGm2YSfE1_jD-mvfk/edit"
+sh = gc.open_by_url(spreadsheet_url)
+
+# Select worksheet by name or index (default first sheet)
+worksheet = sh.sheet1
+
+# Function to append feedback data to the sheet
+def append_feedback_to_sheet(data_dict):
+    # Data dict keys: Timestamp, Predicted_Label, Punjabi_Translation, Confidence, Feedback
+    row = [
+        data_dict.get("Timestamp", ""),
+        data_dict.get("Predicted_Label", ""),
+        data_dict.get("Punjabi_Translation", ""),
+        str(data_dict.get("Confidence", "")),
+        data_dict.get("Feedback", "")
+    ]
+    worksheet.append_row(row)
+#########################################################333
     if st.button("Submit Feedback"):
-        feedback_data = {
-            "Timestamp": [datetime.now().strftime("%Y-%m-%d %H:%M:%S")],
-            "Predicted_Label": [predicted_label],
-            "Punjabi_Translation": [punjabi_translation],
-            "Confidence": [confidence],
-            "Feedback": [feedback]
-        }
-        
-        feedback_df = pd.DataFrame(feedback_data)
-        csv_file = "feedback_data.csv"
-
-        # Check if file exists and append, else create
-        try:
-            existing_df = pd.read_csv(csv_file)
-            final_df = pd.concat([existing_df, feedback_df], ignore_index=True)
-        except FileNotFoundError:
-            final_df = feedback_df
-
-        final_df.to_csv(csv_file, index=False)
-        st.success("Feedback submitted successfully!")
+    feedback_data = {
+        "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "Predicted_Label": predicted_label,
+        "Punjabi_Translation": punjabi_translation,
+        "Confidence": confidence,
+        "Feedback": feedback
+    }
+    
+    try:
+        append_feedback_to_sheet(feedback_data)
+        st.success("Feedback submitted successfully!!")
+    except Exception as e:
+        st.error(f"Failed to submit feedback: {e}")

@@ -14,7 +14,7 @@ st.set_page_config(page_title="ISL to Punjabi Translator", layout="centered")
 import gspread
 from google.oauth2.service_account import Credentials
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-credentials = Credentials.from_service_account_file("Credentials.json", scopes=scope)
+credentials = Credentials.from_service_account_file("Credentials1.json", scopes=scope)
 client = gspread.authorize(credentials)
 worksheet = client.open("Feedback").sheet1  # You can also use .worksheet("Sheet1")
 # worksheet = "https://script.google.com/a/macros/thapar.edu/s/AKfycbzBnlbsz0zMr_563kR8b50nnP7_vLieLsupqNsBWCUdo6dQ5JBpwwGxiXTlPj1fB8ezIw/exec"

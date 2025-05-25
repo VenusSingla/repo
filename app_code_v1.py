@@ -15,7 +15,7 @@ st.set_page_config(page_title="ISL to Punjabi Translator", layout="centered")
 import gspread
 from google.oauth2.service_account import Credentials
 
-
+gcp = st.secrets["gcp"]
 scope = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive"

@@ -20,8 +20,8 @@ scope = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive"
 ]
-creds = service_account.Credentials.from_service_account_file(
-    [gcp], scopes=scope
+service_account.Credentials.from_service_account_file(
+    gcp, scopes=scope
 )
 client = gspread.authorize(creds)
 worksheet = client.open("isl-feedback").sheet1  # You can also use .worksheet("Sheet1")

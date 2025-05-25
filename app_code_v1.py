@@ -23,7 +23,7 @@ creds = Credentials.from_service_account_info(
     scopes=scope
 )
 client = gspread.authorize(creds)
-worksheet = client.open("Feedback").sheet1  # You can also use .worksheet("Sheet1")
+worksheet = client.open("isl-feedback").sheet1  # You can also use .worksheet("Sheet1")
 # worksheet = "https://script.google.com/a/macros/thapar.edu/s/AKfycbzBnlbsz0zMr_563kR8b50nnP7_vLieLsupqNsBWCUdo6dQ5JBpwwGxiXTlPj1fB8ezIw/exec"
 
 st.title("🖐️ Sanket2Shabd")

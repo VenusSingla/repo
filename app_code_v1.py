@@ -10,6 +10,7 @@ import tempfile
 from scipy.io.wavfile import write
 import pandas as pd
 from datetime import datetime
+from google.oauth2 import service_account 
 st.set_page_config(page_title="ISL to Punjabi Translator", layout="centered")
 import gspread
 from google.oauth2.service_account import Credentials

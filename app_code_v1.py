@@ -13,6 +13,7 @@ from datetime import datetime
 st.set_page_config(page_title="ISL to Punjabi Translator", layout="centered")
 import gspread
 from google.oauth2.service_account import Credentials
+SERVICE_ACCOUNT_FILE = "credentials.json"
 scope = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive"

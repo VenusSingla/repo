@@ -14,6 +14,9 @@ from google.oauth2 import service_account
 st.set_page_config(page_title="ISL to Punjabi Translator", layout="centered")
 import gspread
 from google.oauth2.service_account import Credentials
+import os
+
+print("File found:", os.path.exists("Credentials1.json"))
 SERVICE_ACCOUNT_FILE = "Credentials1.json"
 scope = [
     "https://www.googleapis.com/auth/spreadsheets",

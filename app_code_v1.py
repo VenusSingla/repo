@@ -14,13 +14,11 @@ st.set_page_config(page_title="ISL to Punjabi Translator", layout="centered")
 import gspread
 from google.oauth2.service_account import Credentials
 scope = [
-    
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive"
 ]
-creds = Credentials.from_service_account_info(
-    st.secrets["gcp"],
-    scopes=scope
+creds = service_account.Credentials.from_service_account_file(
+    SERVICE_ACCOUNT_FILE, scopes=scope
 )
 client = gspread.authorize(creds)
 worksheet = client.open("isl-feedback").sheet1  # You can also use .worksheet("Sheet1")

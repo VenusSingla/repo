@@ -14,22 +14,19 @@ from google.oauth2 import service_account
 st.set_page_config(page_title="ISL to Punjabi Translator", layout="centered")
 import gspread
 from google.oauth2.service_account import Credentials
+# Load the secret dict
 creds_raw = st.secrets["gcp_service_account"]
-creds_dict = dict(creds_raw)  # make a mutable copy
+creds_dict = dict(creds_raw)  # Make a mutable copy
+
+# Fix the private_key string formatting by replacing escaped newlines with actual newlines
 creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
 
-print(repr(creds_dict["private_key"])) 
-scope = [
-    "https://www.googleapis.com/auth/spreadsheets",
-    "https://www.googleapis.com/auth/drive"
-]
-# creds_raw = st.secrets["gcp_service_account"]
-# creds_dict = dict(creds_raw)  # make a mutable copy
-# creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
-print(repr(private_key))
-creds = service_account.Credentials.from_service_account_info(
-    st.secrets["gcp_service_account"], scopes=scope
-)
+print(repr(creds_dict["private_key"]))  # print the private key string with newlines fixed
+
+# Use the credentials dict to create Credentials object
+scope = ["https://www.googleapis.com/auth/cloud-platform"]
+creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=scope)
+
 
 client = gspread.authorize(creds)
 worksheet = client.open("isl-feedback").sheet1

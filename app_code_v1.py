@@ -14,17 +14,15 @@ from google.oauth2 import service_account
 st.set_page_config(page_title="ISL to Punjabi Translator", layout="centered")
 import gspread
 from google.oauth2.service_account import Credentials
-# Load the secret dict
-creds_raw = st.secrets["gcp_service_account"]
-creds_dict = dict(creds_raw)  # Make a mutable copy
+import json
 
-# Fix the private_key string formatting by replacing escaped newlines with actual newlines
-creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+creds_json_str = """{
+  "type": "...",
+  "private_key": "-----BEGIN PRIVATE KEY-----\\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDnoi1N3+1ZYFE8\\nNed3GX8g7iyUXcQdYowKV9pCUWKK0vuZ9/TTrEuSLvsOoLjFJf8c4QQUsX0VOASc\\n..."
+}"""
 
-print(repr(creds_dict["private_key"]))  # print the private key string with newlines fixed
+creds_dict = json.loads(creds_json_str)  # This will convert \\n to \n properly
 
-# Use the credentials dict to create Credentials object
-scope = ["https://www.googleapis.com/auth/cloud-platform"]
 creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=scope)
 
 

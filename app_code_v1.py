@@ -14,6 +14,11 @@ from google.oauth2 import service_account
 st.set_page_config(page_title="ISL to Punjabi Translator", layout="centered")
 import gspread
 from google.oauth2.service_account import Credentials
+creds_raw = st.secrets["gcp_service_account"]
+creds_dict = dict(creds_raw)  # make a mutable copy
+creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+
+print(repr(creds_dict["private_key"])) 
 scope = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive"

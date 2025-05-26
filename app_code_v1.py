@@ -18,7 +18,7 @@ scope = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive"
 ]
-creds_dict = st.secrets["gcp_service_account"]
+creds_raw = st.secrets["gcp_service_account"]
 creds_dict = dict(creds_raw)  # make a mutable copy
 creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
 creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=scope)

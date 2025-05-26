@@ -21,6 +21,7 @@ scope = [
 # creds_raw = st.secrets["gcp_service_account"]
 # creds_dict = dict(creds_raw)  # make a mutable copy
 # creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+print(repr(private_key))
 creds = service_account.Credentials.from_service_account_info(
     st.secrets["gcp_service_account"], scopes=scope
 )

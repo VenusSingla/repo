@@ -15,11 +15,10 @@ st.set_page_config(page_title="ISL to Punjabi Translator", layout="centered")
 import gspread
 from google.oauth2.service_account import Credentials
 
-gcp = st.secrets["gcp_service_account"]
-scope = ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"]
-creds=service_account.Credentials.from_service_account_file(gcp, scopes=scope)
+creds_dict = st.secrets["gcp_service_account"]
+creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=scope)
 client = gspread.authorize(creds)
-worksheet = client.open("isl-feedback").sheet1  # You can also use .worksheet("Sheet1")
+worksheet = client.open("isl-feedback").sheet1
 # worksheet = "https://script.google.com/a/macros/thapar.edu/s/AKfycbzBnlbsz0zMr_563kR8b50nnP7_vLieLsupqNsBWCUdo6dQ5JBpwwGxiXTlPj1fB8ezIw/exec"
 
 st.title("🖐️ Sanket2Shabd")

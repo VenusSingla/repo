@@ -23,7 +23,7 @@ creds = service_account.Credentials.from_service_account_info(creds_dict, scopes
 client = gspread.authorize(creds)
 worksheet = client.open("isl-feedback").sheet1
 # worksheet = "https://script.google.com/a/macros/thapar.edu/s/AKfycbzBnlbsz0zMr_563kR8b50nnP7_vLieLsupqNsBWCUdo6dQ5JBpwwGxiXTlPj1fB8ezIw/exec"
-
+st.write("Test value:", worksheet.cell(1, 1).value)
 st.title("🖐️ Sanket2Shabd")
 predicted_label = ""
 punjabi_translation = ""

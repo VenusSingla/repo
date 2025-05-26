@@ -18,10 +18,13 @@ scope = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive"
 ]
-creds_raw = st.secrets["gcp_service_account"]
-creds_dict = dict(creds_raw)  # make a mutable copy
-creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
-creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=scope)
+# creds_raw = st.secrets["gcp_service_account"]
+# creds_dict = dict(creds_raw)  # make a mutable copy
+# creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+creds = service_account.Credentials.from_service_account_info(
+    st.secrets["gcp_service_account"], scopes=scope
+)
+
 client = gspread.authorize(creds)
 worksheet = client.open("isl-feedback").sheet1
 # worksheet = "https://script.google.com/a/macros/thapar.edu/s/AKfycbzBnlbsz0zMr_563kR8b50nnP7_vLieLsupqNsBWCUdo6dQ5JBpwwGxiXTlPj1fB8ezIw/exec"

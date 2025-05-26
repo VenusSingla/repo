@@ -23,7 +23,7 @@ creds_json_str = """{
 
 creds_dict = json.loads(creds_json_str)  # This will convert \\n to \n properly
 
-creds = service_account.Credentials.from_service_account_info(creds_dict, scopes=scope)
+creds = service_account.Credentials.from_service_account_info(creds_dict)
 
 
 client = gspread.authorize(creds)

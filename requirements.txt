@@ -7,4 +7,3 @@ scipy
 opencv-python-headless
 gspread 
 google-auth
-python-3.11

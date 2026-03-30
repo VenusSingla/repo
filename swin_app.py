@@ -9,14 +9,10 @@ import io
 
 # Load models
 @st.cache_resource
-def load_models():
-    model = SwinForImageClassification.from_pretrained("vsingla/Swin_transformer")
-    processor = AutoImageProcessor.from_pretrained("vsingla/Swin_transformer")
-    model_speech = VitsModel.from_pretrained("facebook/mms-tts-pan")
-    tokenizer = AutoTokenizer.from_pretrained("facebook/mms-tts-pan")
-    return model, processor, model_speech, tokenizer
-
-model, processor, model_speech, tokenizer = load_models()
+model = SwinForImageClassification.from_pretrained("vsingla/Swin_transformer")
+processor = AutoImageProcessor.from_pretrained("vsingla/Swin_transformer")
+model_speech = VitsModel.from_pretrained("facebook/mms-tts-pan")
+tokenizer = AutoTokenizer.from_pretrained("facebook/mms-tts-pan")
 translation = translator.translate(predicted_label, src='en', dest='pa')
 
 # Label mapping

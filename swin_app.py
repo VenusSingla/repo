@@ -1,14 +1,11 @@
 import streamlit as st
-import cv2
-import numpy as np
 import torch
-import asyncio
+import numpy as np
 from PIL import Image, ImageDraw
-from transformers import AutoProcessor, ViTForImageClassification, ViTFeatureExtractor, VitsModel, AutoTokenizer
 from transformers import AutoImageProcessor, SwinForImageClassification
-from googletrans import Translator
-import tempfile
+from transformers import VitsModel, AutoTokenizer
 from scipy.io.wavfile import write
+import io
 
 # Load models
 @st.cache_resource

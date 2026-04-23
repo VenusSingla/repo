@@ -236,15 +236,39 @@ def perform_inference(pil_image: Image.Image, threshold=0.3):
 
 # ------------------ Audio Generation ------------------
 def generate_audio(text):
-    inputs = tokenizer(text, return_tensors="pt")
-    with torch.no_grad():
-        output = model_speech(**inputs).waveform
-    waveform_np = output.squeeze().cpu().numpy()
-    sampling_rate = model_speech.config.sampling_rate
-    audio_filename = "/tmp/output_audio.wav"
-    waveform_int16 = (waveform_np * 32767).astype(np.int16)
-    write(audio_filename, sampling_rate, waveform_int16)
-    return audio_filename
+    try:
+        inputs = tokenizer(text, return_tensors="pt")
+        
+        with torch.no_grad():
+            output = model_speech(**inputs)
+        
+        # VITS returns waveform of shape [1, 1, samples] or [1, samples]
+        waveform = output.waveform
+        
+        # Safely squeeze all extra dimensions → 1D array
+        waveform_np = waveform.squeeze().cpu().numpy()
+        
+        # If still 2D for some reason, take first channel
+        if waveform_np.ndim == 2:
+            waveform_np = waveform_np[0]
+        
+        # Normalize to [-1, 1] to avoid clipping/distortion
+        max_val = np.abs(waveform_np).max()
+        if max_val > 0:
+            waveform_np = waveform_np / max_val
+        
+        # Scale to int16 range with slight headroom to avoid clipping
+        waveform_int16 = (waveform_np * 32000).astype(np.int16)
+        
+        sampling_rate = model_speech.config.sampling_rate
+        audio_filename = "/tmp/output_audio.wav"
+        write(audio_filename, sampling_rate, waveform_int16)
+        
+        return audio_filename
+
+    except Exception as e:
+        st.error(f"Audio generation failed: {str(e)}")
+        return None
 
 # ------------------ Run Pipeline on New Image ------------------
 def run_pipeline(pil_image: Image.Image):
@@ -351,12 +375,11 @@ if st.session_state.current_image is not None:
         st.success(f"✅ Predicted: **{label}** (confidence: {conf:.1%})")
         st.info(f"ਪੰਜਾਬੀ: {punjabi}")
 
-        if st.button("🔊 Generate Audio"):
-            with st.spinner("Generating audio..."):
-                try:
-                    st.session_state.audio_file = generate_audio(punjabi)
-                except Exception as e:
-                    st.error(f"Audio generation failed: {str(e)}")
-
-        if st.session_state.audio_file:
-            st.audio(st.session_state.audio_file, format="audio/wav")
+    if st.button("🔊 Generate Audio"):
+        with st.spinner("Generating audio..."):
+            audio_file = generate_audio(st.session_state.punjabi_text)
+            if audio_file:
+                st.session_state.audio_file = audio_file
+    
+    if st.session_state.audio_file:
+        st.audio(st.session_state.audio_file, format="audio/wav")

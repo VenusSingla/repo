@@ -56,7 +56,7 @@ punjabi_translation = {
     'BABY': 'ਬੱਚਾ', 'BAD': 'ਬੁਰਾ', 'BARK': 'ਭੌਂਕਣਾ', 'BEAUTIFUL': 'ਸੁੰਦਰ',
     'BECOME': 'ਬਣ', 'BED': 'ਬਿਸਤਰੇ', 'BIG': 'ਵੱਡਾ', 'BITE': 'ਦੰਦੀ',
     'BORED': 'ਬੋਰ', 'BRING': 'ਲਿਆਓ', 'BUSY': 'ਰੁੱਝੇ ਹੋਏ', 'CALCULATOR': 'ਕੈਲਕੁਲੇਟਰ',
-    'CALL': 'ਕਾਲ ਕਰੋ', 'CHAT': 'ਗੱਲਬਾਤ', 'CLASS': 'ਕਲਾਸ', 'COLD': 'ਠੰਡਾ',
+    'CALL': 'ਕਾਲ ਕਰੋ', 'CHAT': 'ਗੱਲਬਾਤ', 'CLASS': 'ਜਮਾਤ', 'COLD': 'ਠੰਡਾ',
     'COLLEGE': 'ਕਾਲਜ', 'COMB': 'ਕੰਘਾ', 'COME': 'ਆਉਣਾ', 'CONGRATULATIONS': 'ਵਧਾਈਆਂ',
     'COST': 'ਲਾਗਤ', 'CRYING': 'ਰੋਣਾ', 'DANCE': 'ਡਾਂਸ', 'DARE': 'ਹਿੰਮਤ',
     'DIFFERENCE': 'ਅੰਤਰ', 'DILEMMA': 'ਦੁਬਿਧਾ', 'DISAPPOINTED': 'ਨਿਰਾਸ਼', 'DO': 'ਕਰਨਾ',

@@ -133,11 +133,18 @@ def draw_styled_landmarks(image, results):
             mp_drawing.DrawingSpec(color=(245, 66, 230), thickness=2, circle_radius=2)
         )
 
-def extract_keypoints(image):
+def extract_keypoints(image_rgb_np):
+    """
+    Accepts a NumPy array in RGB format (as returned by np.array(PIL_image)).
+    MediaPipe expects RGB, so no color conversion needed.
+    """
     try:
-        # image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        results = holistic.process(image)
-        draw_styled_landmarks(image, results)
+        results = holistic.process(image_rgb_np)
+        
+        # Draw landmarks on a copy
+        annotated = image_rgb_np.copy()
+        draw_styled_landmarks(annotated, results)
+        
         keypoints = []
         if results.pose_landmarks:
             for landmark in results.pose_landmarks.landmark:
@@ -148,22 +155,23 @@ def extract_keypoints(image):
         if results.right_hand_landmarks:
             for landmark in results.right_hand_landmarks.landmark:
                 keypoints.append((landmark.x, landmark.y, landmark.z))
-        return image_rgb, keypoints
+        
+        return annotated, keypoints  # annotated is RGB numpy array
     except Exception as e:
         print(f"Error extracting keypoints: {str(e)}")
         raise
 
-# ------------------ Inference ------------------
+
 def perform_inference(image, threshold=0.3):
     try:
         if image.mode != 'RGB':
             image = image.convert('RGB')
 
-        # Convert PIL → OpenCV for MediaPipe
-        image_cv = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        # PIL image → NumPy RGB array (MediaPipe expects RGB, no cv2 needed)
+        image_np = np.array(image)
 
         # Extract landmarks using MediaPipe
-        image_with_landmarks, keypoints = extract_keypoints(image_cv)
+        image_with_landmarks, keypoints = extract_keypoints(image_np)
 
         # Run Swin transformer inference
         inputs = processor(images=image, return_tensors="pt")
@@ -178,7 +186,6 @@ def perform_inference(image, threshold=0.3):
             return "Not Recognized", "ਪਛਾਣਿਆ ਨਹੀਂ ਗਿਆ", image_with_landmarks, keypoints
         else:
             predicted_label = id2label.get(str(predicted_index), "Unknown")
-            # Convert underscore labels to space (e.g. DONT_CARE → DONT CARE)
             label_key = predicted_label.replace('_', ' ')
             punjabi_text = punjabi_translation.get(label_key, predicted_label)
             return predicted_label, punjabi_text, image_with_landmarks, keypoints

@@ -58,7 +58,7 @@ punjabi_translation = {
     'BORED': 'ਬੋਰ', 'BRING': 'ਲਿਆਓ', 'BUSY': 'ਰੁੱਝੇ ਹੋਏ', 'CALCULATOR': 'ਕੈਲਕੁਲੇਟਰ',
     'CALL': 'ਕਾਲ ਕਰੋ', 'CHAT': 'ਗੱਲਬਾਤ', 'CLASS': 'ਜਮਾਤ', 'COLD': 'ਠੰਡਾ',
     'COLLEGE': 'ਕਾਲਜ', 'COMB': 'ਕੰਘਾ', 'COME': 'ਆਉਣਾ', 'CONGRATULATIONS': 'ਵਧਾਈਆਂ',
-    'COST': 'ਕੀਮਤ', 'CRYING': 'ਰੋਣਾ', 'DANCE': 'ਡਾਂਸ', 'DARE': 'ਹਿੰਮਤ',
+    'COST': 'ਮੁੱਲ', 'CRYING': 'ਰੋਣਾ', 'DANCE': 'ਡਾਂਸ', 'DARE': 'ਹਿੰਮਤ',
     'DIFFERENCE': 'ਅੰਤਰ', 'DILEMMA': 'ਦੁਬਿਧਾ', 'DISAPPOINTED': 'ਨਿਰਾਸ਼', 'DO': 'ਕਰਨਾ',
     'DOCTOR': 'ਡਾਕਟਰ', 'DONT CARE': 'ਫਰਕ ਨਹੀਂ ਪੈਂਦਾ', 'DRINK': 'ਪੀਓ', 'ENJOY': 'ਅਨੰਦ ਲਓ',
     'FARM': 'ਖੇਤ', 'FARMER': 'ਕਿਸਾਨ', 'FAVOUR': 'ਪਾਰਟੀ ਪੱਖ', 'FEVER': 'ਬੁਖ਼ਾਰ',

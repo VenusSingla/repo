@@ -9,11 +9,14 @@ import io
 
 # Load models
 @st.cache_resource
-model = SwinForImageClassification.from_pretrained("vsingla/Swin_transformer")
-processor = AutoImageProcessor.from_pretrained("vsingla/Swin_transformer")
-model_speech = VitsModel.from_pretrained("facebook/mms-tts-pan")
-tokenizer = AutoTokenizer.from_pretrained("facebook/mms-tts-pan")
-translation = translator.translate(predicted_label, src='en', dest='pa')
+def load_models():
+    model = SwinForImageClassification.from_pretrained("vsingla/Swin_transformer")
+    processor = AutoImageProcessor.from_pretrained("vsingla/Swin_transformer")
+    model_speech = VitsModel.from_pretrained("facebook/mms-tts-pan")
+    tokenizer = AutoTokenizer.from_pretrained("facebook/mms-tts-pan")
+    return model, processor, model_speech, tokenizer
+
+model, processor, model_speech, tokenizer = load_models()
 punjabi_translation =  {
     'ACCIDENT': 'ਹਾਦਸਾ','AEROPLANE': 'ਹਵਾਈ ਜਹਾਜ਼', 'AFRAID': 'ਡਰ', 'AGREE': 'ਸਹਿਮਤ', 'ALL': 'ਸਾਰੇ', 'ANGRY': 'ਗੁੱਸਾ', 'ANYTHING': 'ਕੁਝ ਵੀ',
     'APPRECIATE': 'ਸਰਾਹਨਾ', 'BABY': 'ਬੇਬੀ', 'BAD': 'ਬੁਰਾ', 'BARK': 'ਸੱਕ', 'BEAUTIFUL': 'ਸੁੰਦਰ', 'BECOME': 'ਬਣ','BED': 'ਬਿਸਤਰੇ',

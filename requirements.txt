@@ -1,11 +1,7 @@
 streamlit
 torch
 transformers
-Pillow
-googletrans==4.0.0rc1
 scipy
 opencv-python-headless
-gspread 
-google-auth
 mediapipe
-opencv-python-headless
+huggingface_hub

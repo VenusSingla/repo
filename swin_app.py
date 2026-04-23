@@ -7,14 +7,44 @@ from transformers import VitsModel, AutoTokenizer
 from scipy.io.wavfile import write
 import io
 
-# Load models
+import os
+from huggingface_hub import login
+
 @st.cache_resource
 def load_models():
-    model = SwinForImageClassification.from_pretrained("vsingla/Swin_transformer")
-    processor = AutoImageProcessor.from_pretrained("vsingla/Swin_transformer")
-    model_speech = VitsModel.from_pretrained("facebook/mms-tts-pan")
-    tokenizer = AutoTokenizer.from_pretrained("facebook/mms-tts-pan")
-    return model, processor, model_speech, tokenizer
+    # Authenticate with HuggingFace using secret token
+    hf_token = st.secrets.get("HF_TOKEN", None)
+    if hf_token:
+        login(token=hf_token)
+
+    try:
+        model = SwinForImageClassification.from_pretrained(
+            "vsingla/Swin_transformer",
+            token=hf_token
+        )
+        processor = AutoImageProcessor.from_pretrained(
+            "vsingla/Swin_transformer",
+            token=hf_token
+        )
+        model_speech = VitsModel.from_pretrained(
+            "facebook/mms-tts-pan",
+            token=hf_token
+        )
+        tokenizer = AutoTokenizer.from_pretrained(
+            "facebook/mms-tts-pan",
+            token=hf_token
+        )
+        return model, processor, model_speech, tokenizer
+
+    except OSError as e:
+        st.error(
+            "❌ Failed to load models. Possible causes:\n"
+            "1. The model repo `vsingla/Swin_transformer` is private — add HF_TOKEN to Streamlit secrets\n"
+            "2. The repo name/path is incorrect\n"
+            "3. No internet access on this deployment\n\n"
+            f"Details: {str(e)}"
+        )
+        st.stop()
 
 model, processor, model_speech, tokenizer = load_models()
 punjabi_translation =  {

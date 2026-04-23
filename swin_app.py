@@ -135,9 +135,9 @@ def draw_styled_landmarks(image, results):
 
 def extract_keypoints(image):
     try:
-        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        results = holistic.process(image_rgb)
-        draw_styled_landmarks(image_rgb, results)
+        # image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        results = holistic.process(image)
+        draw_styled_landmarks(image, results)
         keypoints = []
         if results.pose_landmarks:
             for landmark in results.pose_landmarks.landmark:

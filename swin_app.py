@@ -53,7 +53,7 @@ model, processor, model_speech, tokenizer = load_models()
 punjabi_translation = {
     'ACCIDENT': 'ਹਾਦਸਾ', 'AEROPLANE': 'ਹਵਾਈ ਜਹਾਜ਼', 'AFRAID': 'ਡਰ', 'AGREE': 'ਸਹਿਮਤ',
     'ALL': 'ਸਾਰੇ', 'ANGRY': 'ਗੁੱਸਾ', 'ANYTHING': 'ਕੁਝ ਵੀ', 'APPRECIATE': 'ਸਰਾਹਨਾ',
-    'BABY': 'ਬੱਚਾ', 'BAD': 'ਬੁਰਾ', 'BARK': 'ਸੱਕ', 'BEAUTIFUL': 'ਸੁੰਦਰ',
+    'BABY': 'ਬੱਚਾ', 'BAD': 'ਬੁਰਾ', 'BARK': 'ਭੌਂਕਣਾ', 'BEAUTIFUL': 'ਸੁੰਦਰ',
     'BECOME': 'ਬਣ', 'BED': 'ਬਿਸਤਰੇ', 'BIG': 'ਵੱਡਾ', 'BITE': 'ਦੰਦੀ',
     'BORED': 'ਬੋਰ', 'BRING': 'ਲਿਆਓ', 'BUSY': 'ਰੁੱਝੇ ਹੋਏ', 'CALCULATOR': 'ਕੈਲਕੁਲੇਟਰ',
     'CALL': 'ਕਾਲ ਕਰੋ', 'CHAT': 'ਗੱਲਬਾਤ', 'CLASS': 'ਕਲਾਸ', 'COLD': 'ਠੰਡਾ',

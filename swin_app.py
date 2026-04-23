@@ -77,7 +77,7 @@ punjabi_translation = {
     'SLEEP': 'ਸੌਣਾ', 'SLOWER': 'ਧੀਰੇ', 'SOFTLY': 'ਮਿੱਠੇ', 'SOMETHING': 'ਕੁਝ',
     'SOME HOW': 'ਕੁਝ', 'SOME ONE': 'ਕੋਈ', 'SORRY': 'ਮਾਫ ਕਰਨਾ', 'SO MUCH': 'ਬਹੁਤ ਜ਼ਿਆਦਾ',
     'SPEAK': 'ਗੱਲ', 'STOCK': 'ਸਟਾਕ', 'STOP': 'ਰੁਕੋ', 'STUBBORN': 'ਜ਼ਿੱਦੀ',
-    'SURE': 'ਯਕੀਨ', 'TAKE CARE': 'ਆਪਣਾ ਖਿਆਲ ਰੱਖਣਾ', 'TAKE TIME': 'ਸਮਾਂ ਲਵੋ', 'TALK': 'ਗੱਲ',
+    'SURE': 'ਯਕੀਨ', 'TAKE CARE': 'ਖਿਆਲ ਰੱਖਣਾ', 'TAKE TIME': 'ਸਮਾਂ ਲਵੋ', 'TALK': 'ਗੱਲ',
     'TELL': 'ਦੱਸੋ', 'THANK': 'ਧੰਨਵਾਦ', 'THAT': 'ਕਿ', 'THINGS': 'ਗੱਲ',
     'THINK': 'ਸੋਚੋ', 'THIRSTY': 'ਪਿਆਸ', 'TIRED': 'ਥੱਕੇ ਹੋਏ', 'TODAY': 'ਅੱਜ',
     'TRAIN': 'ਰੇਲਗੱਡੀ', 'TRUST': 'ਭਰੋਸਾ', 'TRUTH': 'ਸੱਚ', 'TURN ON': 'ਚਾਲੂ ਕਰੋ',

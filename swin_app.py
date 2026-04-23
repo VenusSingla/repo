@@ -6,6 +6,9 @@ from transformers import AutoImageProcessor, SwinForImageClassification
 from transformers import VitsModel, AutoTokenizer
 from scipy.io.wavfile import write
 import io
+import cv2
+import mediapipe as mp
+import numpy as np
 
 import os
 from huggingface_hub import login
@@ -183,7 +186,51 @@ id2label = {
     '115': 'TODAY', '116': 'TRAIN', '117': 'TRUST', '118': 'TRUTH', '119': 'TURN_ON', '120': 'UNDERSTAND', '121': 'WANT',
     '122': 'WATER', '123': 'WEAR', '124': 'WELCOME', '125': 'WHAT', '126': 'WHERE', '127': 'WHO', '128': 'WORRY', '129': 'YOU_YOUR'
 }
+def draw_styled_landmarks(image, results):
+    if results.face_landmarks:
+        mp_drawing.draw_landmarks(
+            image, results.face_landmarks, mp_holistic.FACEMESH_TESSELATION,
+            mp_drawing.DrawingSpec(color=(80, 110, 10), thickness=1, circle_radius=1),
+            mp_drawing.DrawingSpec(color=(80, 256, 121), thickness=1, circle_radius=1)
+        )
+    if results.pose_landmarks:
+        mp_drawing.draw_landmarks(
+            image, results.pose_landmarks, mp_holistic.POSE_CONNECTIONS,
+            mp_drawing.DrawingSpec(color=(80, 22, 10), thickness=2, circle_radius=4),
+            mp_drawing.DrawingSpec(color=(80, 44, 121), thickness=2, circle_radius=2)
+        )
+    if results.left_hand_landmarks:
+        mp_drawing.draw_landmarks(
+            image, results.left_hand_landmarks, mp_holistic.HAND_CONNECTIONS,
+            mp_drawing.DrawingSpec(color=(121, 22, 76), thickness=2, circle_radius=4),
+            mp_drawing.DrawingSpec(color=(121, 44, 250), thickness=2, circle_radius=2)
+        )
+    if results.right_hand_landmarks:
+        mp_drawing.draw_landmarks(
+            image, results.right_hand_landmarks, mp_holistic.HAND_CONNECTIONS,
+            mp_drawing.DrawingSpec(color=(245, 117, 66), thickness=2, circle_radius=4),
+            mp_drawing.DrawingSpec(color=(245, 66, 230), thickness=2, circle_radius=2)
+        )
 
+def extract_keypoints(image):
+    try:
+        image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        results = holistic.process(image_rgb)
+        draw_styled_landmarks(image_rgb, results)
+        keypoints = []
+        if results.pose_landmarks:
+            for landmark in results.pose_landmarks.landmark:
+                keypoints.append((landmark.x, landmark.y, landmark.z))
+        if results.left_hand_landmarks:
+            for landmark in results.left_hand_landmarks.landmark:
+                keypoints.append((landmark.x, landmark.y, landmark.z))
+        if results.right_hand_landmarks:
+            for landmark in results.right_hand_landmarks.landmark:
+                keypoints.append((landmark.x, landmark.y, landmark.z))
+        return image_rgb, keypoints
+    except Exception as e:
+        print(f"Error extracting keypoints: {str(e)}")
+        raise
 # Function to draw landmarks on image
 def draw_landmarks(image, landmarks):
     draw = ImageDraw.Draw(image)
@@ -192,17 +239,18 @@ def draw_landmarks(image, landmarks):
         draw.ellipse([(x - 5, y - 5), (x + 5, y + 5)], fill='red', outline='red')
     return image
 
-# Inference function
-# Inference function
-def perform_inference(image, threshold=0.3):  # Threshold can be tuned
+def perform_inference(image, threshold=0.3):
     try:
-        # Ensure the image is in RGB mode (convert if necessary)
         if image.mode != 'RGB':
-            print(f"Image mode before conversion: {image.mode}")  # Debugging log
             image = image.convert('RGB')
-            print(f"Image mode after conversion: {image.mode}")  # Debugging log
 
-        # Process the image for inference
+        # Convert PIL image to OpenCV format for MediaPipe
+        image_cv = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+
+        # Extract real landmarks using MediaPipe
+        image_with_landmarks, keypoints = extract_keypoints(image_cv)
+
+        # Run Swin inference
         inputs = processor(images=image, return_tensors="pt")
         with torch.no_grad():
             outputs = model(**inputs)
@@ -210,21 +258,18 @@ def perform_inference(image, threshold=0.3):  # Threshold can be tuned
             predicted_probs, predicted_index = torch.max(predictions, dim=1)
             predicted_index = predicted_index.item()
             confidence = predicted_probs.item()
-        
+
         if confidence < threshold:
-            # Return a tuple with None for landmarks when not recognized
-            return "Not Recognized", "ਪਛਾਣਿਆ ਨਹੀਂ ਗਿਆ", []
+            return "Not Recognized", "ਪਛਾਣਿਆ ਨਹੀਂ ਗਿਆ", image_with_landmarks, keypoints
         else:
             predicted_label = id2label.get(str(predicted_index), "Unknown")
-            # NEW
-            label_key = predicted_label.replace('_', ' ')          # DONT_CARE → DONT CARE
-            punjabi_text = punjabi_translation.get(label_key, predicted_label)  # fallback to English if missing
-            landmarks = [(100, 150), (200, 250), (300, 350)]
-            return predicted_label, punjabi_text, landmarks
-    except Exception as e:
-        print(f"Error during inference: {str(e)}")  # Log the error
-        return "Error", str(e), []  # Return an empty list for landmarks in case of error
+            label_key = predicted_label.replace('_', ' ')
+            punjabi_text = punjabi_translation.get(label_key, predicted_label)
+            return predicted_label, punjabi_text, image_with_landmarks, keypoints
 
+    except Exception as e:
+        print(f"Error during inference: {str(e)}")
+        return "Error", str(e), None, []
 # Function to generate audio
 def generate_audio(text):
     inputs = tokenizer(text, return_tensors="pt")
@@ -284,32 +329,30 @@ if uploaded_file is not None:
             image = image.convert('RGB')
         st.image(image, caption="Processed Image", use_container_width=True)
         # Perform inference once
-        predicted_label, punjabi_translation, landmarks = perform_inference(image)
-        if landmarks:  # Check if landmarks are present
-            image_with_landmarks = draw_landmarks(image.copy(), landmarks)
-            st.image(image_with_landmarks, caption="Image with Landmarks", use_container_width=True)
+        # Replace both occurrences of the inference call + landmark display with this:
+        predicted_label, punjabi_text, image_with_landmarks, keypoints = perform_inference(image)
+        
+        if image_with_landmarks is not None:
+            # Convert back to PIL to display in Streamlit
+            landmark_pil = Image.fromarray(image_with_landmarks)
+            st.image(landmark_pil, caption=f"Landmarks detected: {len(keypoints)} keypoints", use_container_width=True)
         else:
-            st.warning("No landmarks to display.")
-
+            st.warning("No landmarks detected.")
+        
         if predicted_label == "Not Recognized":
             st.error("Not recognized sign")
-            st.info(f"Punjabi Translation: {punjabi_translation}")
-            generate_speech_disabled = True
+            st.info(f"Punjabi Translation: {punjabi_text}")
         else:
             st.success(f"Predicted: {predicted_label}")
-            st.info(f"Punjabi Translation: {punjabi_translation}")
-            generate_speech_disabled = False
-    except Exception as e:
-        st.error(f"An error occurred while processing the image: {str(e)}")
-        print(f"Error: {str(e)}") 
-    
-    st.session_state.latest_image = uploaded_file
-
-elif st.session_state.show_camera:
-    capture_image = st.camera_input("Take a Picture")
-    if capture_image is not None:
-        st.session_state.latest_image = capture_image
-        st.session_state.show_camera = False
+            st.info(f"Punjabi Translation: {punjabi_text}")
+            
+            st.session_state.latest_image = uploaded_file
+        
+        elif st.session_state.show_camera:
+            capture_image = st.camera_input("Take a Picture")
+            if capture_image is not None:
+                st.session_state.latest_image = capture_image
+                st.session_state.show_camera = False
 
 # Process latest image if available
 if st.session_state.latest_image is not None:

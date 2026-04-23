@@ -1,7 +1,7 @@
 import streamlit as st
 import torch
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image
 from transformers import AutoImageProcessor, SwinForImageClassification
 from transformers import VitsModel, AutoTokenizer
 from scipy.io.wavfile import write
@@ -29,10 +29,7 @@ def load_models():
         )
         return model, processor, model_speech, tokenizer
     except OSError as e:
-        st.error(
-            "❌ Failed to load models.\n\n"
-            f"Details: {str(e)}"
-        )
+        st.error(f"❌ Failed to load models.\n\nDetails: {str(e)}")
         st.stop()
 
 model, processor, model_speech, tokenizer = load_models()
@@ -104,12 +101,25 @@ id2label = {
     '125': 'WHAT', '126': 'WHERE', '127': 'WHO', '128': 'WORRY', '129': 'YOU YOUR'
 }
 
+# ------------------ Session State Init ------------------
+# Must be done BEFORE any UI rendering
+for key, default in {
+    "latest_image": None,
+    "show_camera": False,
+    "current_image": None,       # persists the PIL image across reruns
+    "predicted_label": None,
+    "punjabi_text": None,
+    "confidence": None,
+    "audio_file": None,
+}.items():
+    if key not in st.session_state:
+        st.session_state[key] = default
+
 # ------------------ Inference ------------------
 def perform_inference(image, threshold=0.3):
     try:
         if image.mode != 'RGB':
             image = image.convert('RGB')
-
         inputs = processor(images=image, return_tensors="pt")
         with torch.no_grad():
             outputs = model(**inputs)
@@ -117,14 +127,12 @@ def perform_inference(image, threshold=0.3):
             predicted_probs, predicted_index = torch.max(predictions, dim=1)
             predicted_index = predicted_index.item()
             confidence = predicted_probs.item()
-
         if confidence < threshold:
             return "Not Recognized", "ਪਛਾਣਿਆ ਨਹੀਂ ਗਿਆ", confidence
         else:
             predicted_label = id2label.get(str(predicted_index), "Unknown")
             punjabi_text = punjabi_translation.get(predicted_label, predicted_label)
             return predicted_label, punjabi_text, confidence
-
     except Exception as e:
         return "Error", str(e), 0.0
 
@@ -139,70 +147,42 @@ def generate_audio(text):
     waveform_int16 = (waveform_np * 32767).astype(np.int16)
     write(audio_filename, sampling_rate, waveform_int16)
     return audio_filename
-# ------------------ Process & Display ------------------
-def process_and_display(image):
-    st.image(image, caption="Input Image", use_container_width=True)
-
-    with st.spinner("Running inference..."):
-        predicted_label, punjabi_text, confidence = perform_inference(image)
-
-    if predicted_label == "Not Recognized":
-        st.error("❌ Sign not recognized (low confidence)")
-        st.info(f"Punjabi: {punjabi_text}")
-    elif predicted_label == "Error":
-        st.error(f"An error occurred: {punjabi_text}")
-    else:
-        st.success(f"✅ Predicted: **{predicted_label}** (confidence: {confidence:.1%})")
-        st.info(f"ਪੰਜਾਬੀ: {punjabi_text}")
-
-        # Store punjabi_text in session so button click doesn't lose it
-        st.session_state["punjabi_text_for_audio"] = punjabi_text
-
-        if st.button("🔊 Generate Audio"):
-            st.session_state["generate_audio_clicked"] = True
-
-    # Handle audio generation outside the conditional block
-    if st.session_state.get("generate_audio_clicked") and st.session_state.get("punjabi_text_for_audio"):
-        with st.spinner("Generating audio..."):
-            try:
-                audio_file = generate_audio(st.session_state["punjabi_text_for_audio"])
-                st.audio(audio_file, format="audio/wav")
-            except Exception as e:
-                st.error(f"Audio generation failed: {str(e)}")
-        # Reset so it doesn't auto-play on every rerun
-        st.session_state["generate_audio_clicked"] = False
 
 # ------------------ Streamlit UI ------------------
 st.set_page_config(page_title="ISL to Punjabi Translator", layout="centered")
 st.title("🖐️ Sanket2Shabd")
 st.write("Upload an image or capture from webcam to translate Indian Sign Language to Punjabi.")
 
-if "latest_image" not in st.session_state:
-    st.session_state.latest_image = None
-if "show_camera" not in st.session_state:
-    st.session_state.show_camera = False
-
 col1, col2 = st.columns([1, 1])
 with col1:
     if st.button("📷 Capture Image"):
         st.session_state.show_camera = True
+        st.session_state.current_image = None  # clear previous result
+        st.session_state.predicted_label = None
+        st.session_state.audio_file = None
 with col2:
     if st.session_state.show_camera:
         if st.button("❌ Cancel Capture"):
             st.session_state.show_camera = False
             st.rerun()
 
-MAX_FILE_SIZE = 200 * 1024 * 1024
-
+# ------------------ File Upload ------------------
 uploaded_file = st.file_uploader("📁 Upload Image", type=["jpg", "png", "jpeg"])
 
 if uploaded_file is not None:
-    try:
-        image = Image.open(uploaded_file).convert('RGB')
-        process_and_display(image)
-    except Exception as e:
-        st.error(f"Error processing image: {str(e)}")
+    image = Image.open(uploaded_file).convert('RGB')
+    # Only re-run inference if this is a newly uploaded image
+    if st.session_state.current_image is None or st.session_state.get("last_upload") != uploaded_file.name:
+        st.session_state.current_image = image
+        st.session_state.last_upload = uploaded_file.name
+        st.session_state.audio_file = None  # clear old audio
+        with st.spinner("Running inference..."):
+            label, punjabi, conf = perform_inference(image)
+        st.session_state.predicted_label = label
+        st.session_state.punjabi_text = punjabi
+        st.session_state.confidence = conf
 
+# ------------------ Camera Capture ------------------
 elif st.session_state.show_camera:
     capture_image = st.camera_input("Take a Picture")
     if capture_image is not None:
@@ -211,10 +191,40 @@ elif st.session_state.show_camera:
         st.rerun()
 
 if st.session_state.latest_image is not None:
-    try:
-        image = Image.open(st.session_state.latest_image).convert('RGB')
-        process_and_display(image)
-    except Exception as e:
-        st.error(f"Error processing image: {str(e)}")
-    finally:
-        st.session_state.latest_image = None
+    image = Image.open(st.session_state.latest_image).convert('RGB')
+    st.session_state.current_image = image
+    st.session_state.latest_image = None
+    st.session_state.audio_file = None
+    with st.spinner("Running inference..."):
+        label, punjabi, conf = perform_inference(image)
+    st.session_state.predicted_label = label
+    st.session_state.punjabi_text = punjabi
+    st.session_state.confidence = conf
+
+# ------------------ Display Results (always rendered if image exists) ------------------
+if st.session_state.current_image is not None:
+    st.image(st.session_state.current_image, caption="Input Image", use_container_width=True)
+
+    label = st.session_state.predicted_label
+    punjabi = st.session_state.punjabi_text
+    conf = st.session_state.confidence
+
+    if label == "Not Recognized":
+        st.error("❌ Sign not recognized (low confidence)")
+        st.info(f"Punjabi: {punjabi}")
+    elif label == "Error":
+        st.error(f"An error occurred: {punjabi}")
+    else:
+        st.success(f"✅ Predicted: **{label}** (confidence: {conf:.1%})")
+        st.info(f"ਪੰਜਾਬੀ: {punjabi}")
+
+        if st.button("🔊 Generate Audio"):
+            with st.spinner("Generating audio..."):
+                try:
+                    st.session_state.audio_file = generate_audio(punjabi)
+                except Exception as e:
+                    st.error(f"Audio generation failed: {str(e)}")
+
+        # Audio player persists because it's driven by session_state
+        if st.session_state.audio_file:
+            st.audio(st.session_state.audio_file, format="audio/wav")

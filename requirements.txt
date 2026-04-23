@@ -1,6 +1,8 @@
 streamlit
-torch
 transformers
 scipy
-mediapipe==0.10.9
 huggingface_hub
+mediapipe==0.10.9
+opencv-python-headless==4.8.1.78
+torch==2.1.0
+torchvision==0.16.0

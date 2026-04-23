@@ -1,11 +1,10 @@
 import streamlit as st
 import torch
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFilter, ImageEnhance
 from transformers import AutoImageProcessor, SwinForImageClassification
 from transformers import VitsModel, AutoTokenizer
 from scipy.io.wavfile import write
-import os
 from huggingface_hub import login
 
 # ------------------ Load Models ------------------
@@ -102,39 +101,141 @@ id2label = {
 }
 
 # ------------------ Session State Init ------------------
-# Must be done BEFORE any UI rendering
 for key, default in {
     "latest_image": None,
     "show_camera": False,
-    "current_image": None,       # persists the PIL image across reruns
+    "current_image": None,
+    "preprocessed_image": None,
     "predicted_label": None,
     "punjabi_text": None,
     "confidence": None,
     "audio_file": None,
+    "last_upload": None,
 }.items():
     if key not in st.session_state:
         st.session_state[key] = default
 
+# ------------------ Skin Detection & Hand Crop ------------------
+def detect_hand_region(image: Image.Image):
+    """
+    Detects skin-colored regions using HSV-like thresholding on numpy array,
+    finds the largest skin blob, crops and returns it with padding.
+    Falls back to centre-crop if no skin detected.
+    """
+    img_np = np.array(image).astype(np.float32)
+    R, G, B = img_np[:,:,0], img_np[:,:,1], img_np[:,:,2]
+
+    # Skin detection using RGB rules (works without cv2/mediapipe)
+    # Rule: R>95, G>40, B>20, max-min>15, |R-G|>15, R>G, R>B
+    skin_mask = (
+        (R > 95) & (G > 40) & (B > 20) &
+        ((np.maximum(np.maximum(R, G), B) - np.minimum(np.minimum(R, G), B)) > 15) &
+        (np.abs(R - G) > 15) &
+        (R > G) & (R > B)
+    ).astype(np.uint8)
+
+    # Find bounding box of skin region
+    rows = np.any(skin_mask, axis=1)
+    cols = np.any(skin_mask, axis=0)
+
+    if not rows.any() or not cols.any():
+        # Fallback: return centre crop (upper body / hand area)
+        w, h = image.size
+        margin_x = w // 6
+        margin_y = h // 6
+        return image.crop((margin_x, margin_y, w - margin_x, h - margin_y)), False
+
+    rmin, rmax = np.where(rows)[0][[0, -1]]
+    cmin, cmax = np.where(cols)[0][[0, -1]]
+
+    # Add 15% padding around detected region
+    h, w = img_np.shape[:2]
+    pad_y = int((rmax - rmin) * 0.15)
+    pad_x = int((cmax - cmin) * 0.15)
+    rmin = max(0, rmin - pad_y)
+    rmax = min(h, rmax + pad_y)
+    cmin = max(0, cmin - pad_x)
+    cmax = min(w, cmax + pad_x)
+
+    cropped = image.crop((cmin, rmin, cmax, rmax))
+    return cropped, True
+
+
+def preprocess_for_sign(image: Image.Image):
+    """
+    Full preprocessing pipeline:
+    1. Detect & crop hand region
+    2. Enhance contrast and sharpness
+    3. Return preprocessed image + annotated display image
+    """
+    from PIL import ImageDraw
+
+    # Step 1: Detect hand region
+    cropped, detected = detect_hand_region(image)
+
+    # Step 2: Enhance the cropped region
+    cropped = ImageEnhance.Contrast(cropped).enhance(1.4)
+    cropped = ImageEnhance.Sharpness(cropped).enhance(2.0)
+
+    # Step 3: Build annotated display image showing the detected box
+    display_img = image.copy()
+    draw = ImageDraw.Draw(display_img)
+
+    if detected:
+        # Re-detect to get box coords for drawing
+        img_np = np.array(image).astype(np.float32)
+        R, G, B = img_np[:,:,0], img_np[:,:,1], img_np[:,:,2]
+        skin_mask = (
+            (R > 95) & (G > 40) & (B > 20) &
+            ((np.maximum(np.maximum(R, G), B) - np.minimum(np.minimum(R, G), B)) > 15) &
+            (np.abs(R - G) > 15) & (R > G) & (R > B)
+        ).astype(np.uint8)
+        rows = np.any(skin_mask, axis=1)
+        cols = np.any(skin_mask, axis=0)
+        if rows.any() and cols.any():
+            rmin, rmax = np.where(rows)[0][[0, -1]]
+            cmin, cmax = np.where(cols)[0][[0, -1]]
+            h_img, w_img = img_np.shape[:2]
+            pad_y = int((rmax - rmin) * 0.15)
+            pad_x = int((cmax - cmin) * 0.15)
+            rmin = max(0, rmin - pad_y)
+            rmax = min(h_img, rmax + pad_y)
+            cmin = max(0, cmin - pad_x)
+            cmax = min(w_img, cmax + pad_x)
+            # Draw bounding box in green
+            draw.rectangle([cmin, rmin, cmax, rmax], outline=(0, 255, 0), width=4)
+            draw.text((cmin, max(0, rmin - 20)), "Hand Region", fill=(0, 255, 0))
+
+    return cropped, display_img, detected
+
+
 # ------------------ Inference ------------------
-def perform_inference(image, threshold=0.3):
+def perform_inference(image: Image.Image, threshold=0.3):
     try:
         if image.mode != 'RGB':
             image = image.convert('RGB')
-        inputs = processor(images=image, return_tensors="pt")
+
+        # Preprocess: crop to hand region
+        preprocessed, display_img, hand_detected = preprocess_for_sign(image)
+
+        inputs = processor(images=preprocessed, return_tensors="pt")
         with torch.no_grad():
             outputs = model(**inputs)
             predictions = torch.nn.functional.softmax(outputs.logits, dim=-1)
             predicted_probs, predicted_index = torch.max(predictions, dim=1)
             predicted_index = predicted_index.item()
             confidence = predicted_probs.item()
+
         if confidence < threshold:
-            return "Not Recognized", "ਪਛਾਣਿਆ ਨਹੀਂ ਗਿਆ", confidence
+            return "Not Recognized", "ਪਛਾਣਿਆ ਨਹੀਂ ਗਿਆ", confidence, display_img, hand_detected
         else:
             predicted_label = id2label.get(str(predicted_index), "Unknown")
             punjabi_text = punjabi_translation.get(predicted_label, predicted_label)
-            return predicted_label, punjabi_text, confidence
+            return predicted_label, punjabi_text, confidence, display_img, hand_detected
+
     except Exception as e:
-        return "Error", str(e), 0.0
+        return "Error", str(e), 0.0, image, False
+
 
 # ------------------ Audio Generation ------------------
 def generate_audio(text):
@@ -148,6 +249,7 @@ def generate_audio(text):
     write(audio_filename, sampling_rate, waveform_int16)
     return audio_filename
 
+
 # ------------------ Streamlit UI ------------------
 st.set_page_config(page_title="ISL to Punjabi Translator", layout="centered")
 st.title("🖐️ Sanket2Shabd")
@@ -157,7 +259,7 @@ col1, col2 = st.columns([1, 1])
 with col1:
     if st.button("📷 Capture Image"):
         st.session_state.show_camera = True
-        st.session_state.current_image = None  # clear previous result
+        st.session_state.current_image = None
         st.session_state.predicted_label = None
         st.session_state.audio_file = None
 with col2:
@@ -166,23 +268,22 @@ with col2:
             st.session_state.show_camera = False
             st.rerun()
 
-# ------------------ File Upload ------------------
 uploaded_file = st.file_uploader("📁 Upload Image", type=["jpg", "png", "jpeg"])
 
 if uploaded_file is not None:
     image = Image.open(uploaded_file).convert('RGB')
-    # Only re-run inference if this is a newly uploaded image
-    if st.session_state.current_image is None or st.session_state.get("last_upload") != uploaded_file.name:
+    if st.session_state.last_upload != uploaded_file.name:
         st.session_state.current_image = image
         st.session_state.last_upload = uploaded_file.name
-        st.session_state.audio_file = None  # clear old audio
-        with st.spinner("Running inference..."):
-            label, punjabi, conf = perform_inference(image)
+        st.session_state.audio_file = None
+        with st.spinner("🔍 Detecting hand region & running inference..."):
+            label, punjabi, conf, display_img, hand_detected = perform_inference(image)
         st.session_state.predicted_label = label
         st.session_state.punjabi_text = punjabi
         st.session_state.confidence = conf
+        st.session_state.preprocessed_image = display_img
+        st.session_state.hand_detected = hand_detected
 
-# ------------------ Camera Capture ------------------
 elif st.session_state.show_camera:
     capture_image = st.camera_input("Take a Picture")
     if capture_image is not None:
@@ -195,15 +296,28 @@ if st.session_state.latest_image is not None:
     st.session_state.current_image = image
     st.session_state.latest_image = None
     st.session_state.audio_file = None
-    with st.spinner("Running inference..."):
-        label, punjabi, conf = perform_inference(image)
+    with st.spinner("🔍 Detecting hand region & running inference..."):
+        label, punjabi, conf, display_img, hand_detected = perform_inference(image)
     st.session_state.predicted_label = label
     st.session_state.punjabi_text = punjabi
     st.session_state.confidence = conf
+    st.session_state.preprocessed_image = display_img
+    st.session_state.hand_detected = hand_detected
 
-# ------------------ Display Results (always rendered if image exists) ------------------
+# ------------------ Display Results ------------------
 if st.session_state.current_image is not None:
-    st.image(st.session_state.current_image, caption="Input Image", use_container_width=True)
+    col_orig, col_proc = st.columns(2)
+    with col_orig:
+        st.subheader("Original")
+        st.image(st.session_state.current_image, use_container_width=True)
+    with col_proc:
+        st.subheader("Hand Detection")
+        if st.session_state.preprocessed_image is not None:
+            st.image(st.session_state.preprocessed_image, use_container_width=True)
+            if st.session_state.get("hand_detected"):
+                st.caption("✅ Hand region detected")
+            else:
+                st.caption("⚠️ No hand detected — using centre crop")
 
     label = st.session_state.predicted_label
     punjabi = st.session_state.punjabi_text
@@ -211,7 +325,6 @@ if st.session_state.current_image is not None:
 
     if label == "Not Recognized":
         st.error("❌ Sign not recognized (low confidence)")
-        st.info(f"Punjabi: {punjabi}")
     elif label == "Error":
         st.error(f"An error occurred: {punjabi}")
     else:
@@ -225,6 +338,5 @@ if st.session_state.current_image is not None:
                 except Exception as e:
                     st.error(f"Audio generation failed: {str(e)}")
 
-        # Audio player persists because it's driven by session_state
         if st.session_state.audio_file:
             st.audio(st.session_state.audio_file, format="audio/wav")

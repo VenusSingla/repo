@@ -61,7 +61,7 @@ punjabi_translation = {
     'COST': 'ਕੀਮਤ', 'CRYING': 'ਰੋਣਾ', 'DANCE': 'ਨੱਚਣਾ', 'DARE': 'ਹਿੰਮਤ',
     'DIFFERENCE': 'ਅੰਤਰ', 'DILEMMA': 'ਦੁਬਿਧਾ', 'DISAPPOINTED': 'ਨਿਰਾਸ਼', 'DO': 'ਕਰਨਾ',
     'DOCTOR': 'ਡਾਕਟਰ', 'DONT CARE': 'ਫਰਕ ਨਹੀਂ ਪੈਂਦਾ', 'DRINK': 'ਪੀਓ', 'ENJOY': 'ਅਨੰਦ ਲਓ',
-    'FARM': 'ਖੇਤ', 'FARMER': 'ਕਿਸਾਨ', 'FAVOUR': 'ਪਪੱਖਪਾਤ', 'FEVER': 'ਬੁਖ਼ਾਰ',
+    'FARM': 'ਖੇਤ', 'FARMER': 'ਕਿਸਾਨ', 'FAVOUR': 'ਉਪਕਾਰ', 'FEVER': 'ਬੁਖ਼ਾਰ',
     'FINE': 'ਠੀਕ ਹੈ', 'FOOD': 'ਭੋਜਨ', 'FREE': 'ਮੁਫਤ', 'FRIEND': 'ਦੋਸਤ',
     'FROM': 'ਤੋਂ', 'GO': 'ਜਾਓ', 'GOOD': 'ਚੰਗਾ', 'GRATEFUL': 'ਸ਼ੁਕਰਗੁਜ਼ਾਰ',
     'HAD': 'ਸੀ', 'HAPPENED': 'ਹੋਇਆ', 'HAPPY': 'ਖੁਸ਼', 'HEAR': 'ਸੁਣੋ',

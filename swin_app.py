@@ -129,14 +129,22 @@ def perform_inference(image, threshold=0.3):
         return "Error", str(e), 0.0
 
 # ------------------ Audio Generation ------------------
+audio_filename = "output_audio.wav"
+write(audio_filename, sampling_rate, waveform_np.T)
+# ------------------ Audio Generation ------------------
 def generate_audio(text):
     inputs = tokenizer(text, return_tensors="pt")
     with torch.no_grad():
         output = model_speech(**inputs).waveform
-    waveform_np = output.cpu().numpy()
+    waveform_np = output.squeeze().cpu().numpy()  # remove batch dim safely
     sampling_rate = model_speech.config.sampling_rate
-    audio_filename = "output_audio.wav"
-    write(audio_filename, sampling_rate, waveform_np.T)
+    
+    # Use /tmp/ which is always writable on Streamlit Cloud
+    audio_filename = "/tmp/output_audio.wav"
+    
+    # Normalize to int16 for proper WAV output
+    waveform_int16 = (waveform_np * 32767).astype(np.int16)
+    write(audio_filename, sampling_rate, waveform_int16)
     return audio_filename
 
 # ------------------ Process & Display ------------------
@@ -154,10 +162,23 @@ def process_and_display(image):
     else:
         st.success(f"✅ Predicted: **{predicted_label}** (confidence: {confidence:.1%})")
         st.info(f"ਪੰਜਾਬੀ: {punjabi_text}")
+
+        # Store punjabi_text in session so button click doesn't lose it
+        st.session_state["punjabi_text_for_audio"] = punjabi_text
+
         if st.button("🔊 Generate Audio"):
-            with st.spinner("Generating audio..."):
-                audio_file = generate_audio(punjabi_text)
-            st.audio(audio_file)
+            st.session_state["generate_audio_clicked"] = True
+
+    # Handle audio generation outside the conditional block
+    if st.session_state.get("generate_audio_clicked") and st.session_state.get("punjabi_text_for_audio"):
+        with st.spinner("Generating audio..."):
+            try:
+                audio_file = generate_audio(st.session_state["punjabi_text_for_audio"])
+                st.audio(audio_file, format="audio/wav")
+            except Exception as e:
+                st.error(f"Audio generation failed: {str(e)}")
+        # Reset so it doesn't auto-play on every rerun
+        st.session_state["generate_audio_clicked"] = False
 
 # ------------------ Streamlit UI ------------------
 st.set_page_config(page_title="ISL to Punjabi Translator", layout="centered")

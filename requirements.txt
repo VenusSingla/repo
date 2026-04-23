@@ -2,6 +2,5 @@ streamlit
 torch
 transformers
 scipy
-opencv-python-headless
-mediapipe
+mediapipe==0.10.9
 huggingface_hub

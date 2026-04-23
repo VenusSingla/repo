@@ -7,3 +7,5 @@ scipy
 opencv-python-headless
 gspread 
 google-auth
+mediapipe
+opencv-python-headless

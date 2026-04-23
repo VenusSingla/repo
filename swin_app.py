@@ -37,10 +37,10 @@ def load_models():
             "vsingla/Swin_transformer", token=hf_token
         )
         model_speech = VitsModel.from_pretrained(
-            "facebook/mms-tts-pan", token=hf_token
+            "facebook/mms-tts-pnb", token=hf_token
         )
         tokenizer = AutoTokenizer.from_pretrained(
-            "facebook/mms-tts-pan", token=hf_token
+            "facebook/mms-tts-pnb", token=hf_token
         )
         return model, processor, model_speech, tokenizer
     except OSError as e:

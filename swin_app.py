@@ -1,13 +1,29 @@
 import streamlit as st
 import torch
 import numpy as np
-from PIL import Image, ImageFilter, ImageEnhance
+from PIL import Image
 from transformers import AutoImageProcessor, SwinForImageClassification
 from transformers import VitsModel, AutoTokenizer
 from scipy.io.wavfile import write
 from huggingface_hub import login
+import cv2
+import mediapipe as mp
 
-# ------------------ Load Models ------------------
+# ------------------ MediaPipe Holistic Setup ------------------
+mp_drawing = mp.solutions.drawing_utils
+mp_holistic = mp.solutions.holistic
+
+@st.cache_resource
+def load_holistic():
+    return mp_holistic.Holistic(
+        static_image_mode=True,
+        min_detection_confidence=0.5,
+        min_tracking_confidence=0.5
+    )
+
+holistic = load_holistic()
+
+# ------------------ Load ML Models ------------------
 @st.cache_resource
 def load_models():
     hf_token = st.secrets.get("HF_TOKEN", None)
@@ -105,120 +121,102 @@ for key, default in {
     "latest_image": None,
     "show_camera": False,
     "current_image": None,
-    "preprocessed_image": None,
+    "landmark_image": None,
     "predicted_label": None,
     "punjabi_text": None,
     "confidence": None,
     "audio_file": None,
     "last_upload": None,
+    "keypoint_count": 0,
+    "hand_detected": False,
+    "pose_detected": False,
+    "face_detected": False,
 }.items():
     if key not in st.session_state:
         st.session_state[key] = default
 
-# ------------------ Skin Detection & Hand Crop ------------------
-def detect_hand_region(image: Image.Image):
+# ------------------ Draw Landmarks ------------------
+def draw_styled_landmarks(image_rgb, results):
+    """Draw face, pose, left hand, right hand landmarks on image."""
+    annotated = image_rgb.copy()
+
+    if results.face_landmarks:
+        mp_drawing.draw_landmarks(
+            annotated, results.face_landmarks,
+            mp_holistic.FACEMESH_TESSELATION,
+            mp_drawing.DrawingSpec(color=(80, 110, 10), thickness=1, circle_radius=1),
+            mp_drawing.DrawingSpec(color=(80, 256, 121), thickness=1, circle_radius=1)
+        )
+    if results.pose_landmarks:
+        mp_drawing.draw_landmarks(
+            annotated, results.pose_landmarks,
+            mp_holistic.POSE_CONNECTIONS,
+            mp_drawing.DrawingSpec(color=(80, 22, 10), thickness=2, circle_radius=4),
+            mp_drawing.DrawingSpec(color=(80, 44, 121), thickness=2, circle_radius=2)
+        )
+    if results.left_hand_landmarks:
+        mp_drawing.draw_landmarks(
+            annotated, results.left_hand_landmarks,
+            mp_holistic.HAND_CONNECTIONS,
+            mp_drawing.DrawingSpec(color=(121, 22, 76), thickness=2, circle_radius=4),
+            mp_drawing.DrawingSpec(color=(121, 44, 250), thickness=2, circle_radius=2)
+        )
+    if results.right_hand_landmarks:
+        mp_drawing.draw_landmarks(
+            annotated, results.right_hand_landmarks,
+            mp_holistic.HAND_CONNECTIONS,
+            mp_drawing.DrawingSpec(color=(245, 117, 66), thickness=2, circle_radius=4),
+            mp_drawing.DrawingSpec(color=(245, 66, 230), thickness=2, circle_radius=2)
+        )
+    return annotated
+
+# ------------------ Extract Keypoints ------------------
+def extract_keypoints(image_rgb):
     """
-    Detects skin-colored regions using HSV-like thresholding on numpy array,
-    finds the largest skin blob, crops and returns it with padding.
-    Falls back to centre-crop if no skin detected.
+    Run MediaPipe Holistic on an RGB numpy array.
+    Returns annotated image, keypoints list, and detection flags.
     """
-    img_np = np.array(image).astype(np.float32)
-    R, G, B = img_np[:,:,0], img_np[:,:,1], img_np[:,:,2]
+    results = holistic.process(image_rgb)
+    annotated = draw_styled_landmarks(image_rgb, results)
 
-    # Skin detection using RGB rules (works without cv2/mediapipe)
-    # Rule: R>95, G>40, B>20, max-min>15, |R-G|>15, R>G, R>B
-    skin_mask = (
-        (R > 95) & (G > 40) & (B > 20) &
-        ((np.maximum(np.maximum(R, G), B) - np.minimum(np.minimum(R, G), B)) > 15) &
-        (np.abs(R - G) > 15) &
-        (R > G) & (R > B)
-    ).astype(np.uint8)
+    keypoints = []
+    if results.pose_landmarks:
+        for lm in results.pose_landmarks.landmark:
+            keypoints.append((lm.x, lm.y, lm.z))
+    if results.left_hand_landmarks:
+        for lm in results.left_hand_landmarks.landmark:
+            keypoints.append((lm.x, lm.y, lm.z))
+    if results.right_hand_landmarks:
+        for lm in results.right_hand_landmarks.landmark:
+            keypoints.append((lm.x, lm.y, lm.z))
 
-    # Find bounding box of skin region
-    rows = np.any(skin_mask, axis=1)
-    cols = np.any(skin_mask, axis=0)
+    detection_info = {
+        "face": results.face_landmarks is not None,
+        "pose": results.pose_landmarks is not None,
+        "left_hand": results.left_hand_landmarks is not None,
+        "right_hand": results.right_hand_landmarks is not None,
+    }
 
-    if not rows.any() or not cols.any():
-        # Fallback: return centre crop (upper body / hand area)
-        w, h = image.size
-        margin_x = w // 6
-        margin_y = h // 6
-        return image.crop((margin_x, margin_y, w - margin_x, h - margin_y)), False
-
-    rmin, rmax = np.where(rows)[0][[0, -1]]
-    cmin, cmax = np.where(cols)[0][[0, -1]]
-
-    # Add 15% padding around detected region
-    h, w = img_np.shape[:2]
-    pad_y = int((rmax - rmin) * 0.15)
-    pad_x = int((cmax - cmin) * 0.15)
-    rmin = max(0, rmin - pad_y)
-    rmax = min(h, rmax + pad_y)
-    cmin = max(0, cmin - pad_x)
-    cmax = min(w, cmax + pad_x)
-
-    cropped = image.crop((cmin, rmin, cmax, rmax))
-    return cropped, True
-
-
-def preprocess_for_sign(image: Image.Image):
-    """
-    Full preprocessing pipeline:
-    1. Detect & crop hand region
-    2. Enhance contrast and sharpness
-    3. Return preprocessed image + annotated display image
-    """
-    from PIL import ImageDraw
-
-    # Step 1: Detect hand region
-    cropped, detected = detect_hand_region(image)
-
-    # Step 2: Enhance the cropped region
-    cropped = ImageEnhance.Contrast(cropped).enhance(1.4)
-    cropped = ImageEnhance.Sharpness(cropped).enhance(2.0)
-
-    # Step 3: Build annotated display image showing the detected box
-    display_img = image.copy()
-    draw = ImageDraw.Draw(display_img)
-
-    if detected:
-        # Re-detect to get box coords for drawing
-        img_np = np.array(image).astype(np.float32)
-        R, G, B = img_np[:,:,0], img_np[:,:,1], img_np[:,:,2]
-        skin_mask = (
-            (R > 95) & (G > 40) & (B > 20) &
-            ((np.maximum(np.maximum(R, G), B) - np.minimum(np.minimum(R, G), B)) > 15) &
-            (np.abs(R - G) > 15) & (R > G) & (R > B)
-        ).astype(np.uint8)
-        rows = np.any(skin_mask, axis=1)
-        cols = np.any(skin_mask, axis=0)
-        if rows.any() and cols.any():
-            rmin, rmax = np.where(rows)[0][[0, -1]]
-            cmin, cmax = np.where(cols)[0][[0, -1]]
-            h_img, w_img = img_np.shape[:2]
-            pad_y = int((rmax - rmin) * 0.15)
-            pad_x = int((cmax - cmin) * 0.15)
-            rmin = max(0, rmin - pad_y)
-            rmax = min(h_img, rmax + pad_y)
-            cmin = max(0, cmin - pad_x)
-            cmax = min(w_img, cmax + pad_x)
-            # Draw bounding box in green
-            draw.rectangle([cmin, rmin, cmax, rmax], outline=(0, 255, 0), width=4)
-            draw.text((cmin, max(0, rmin - 20)), "Hand Region", fill=(0, 255, 0))
-
-    return cropped, display_img, detected
-
+    return annotated, keypoints, detection_info
 
 # ------------------ Inference ------------------
-def perform_inference(image: Image.Image, threshold=0.3):
+def perform_inference(pil_image: Image.Image, threshold=0.3):
     try:
-        if image.mode != 'RGB':
-            image = image.convert('RGB')
+        if pil_image.mode != 'RGB':
+            pil_image = pil_image.convert('RGB')
 
-        # Preprocess: crop to hand region
-        preprocessed, display_img, hand_detected = preprocess_for_sign(image)
+        # Convert PIL → numpy RGB for MediaPipe
+        image_np = np.array(pil_image)
 
-        inputs = processor(images=preprocessed, return_tensors="pt")
+        # Step 1: Extract landmarks with MediaPipe Holistic
+        annotated_np, keypoints, detection_info = extract_keypoints(image_np)
+
+        # Step 2: Convert annotated image back to PIL for Swin input
+        # Using the landmark-annotated image gives the model richer spatial info
+        annotated_pil = Image.fromarray(annotated_np)
+
+        # Step 3: Run Swin Transformer classification
+        inputs = processor(images=annotated_pil, return_tensors="pt")
         with torch.no_grad():
             outputs = model(**inputs)
             predictions = torch.nn.functional.softmax(outputs.logits, dim=-1)
@@ -227,15 +225,14 @@ def perform_inference(image: Image.Image, threshold=0.3):
             confidence = predicted_probs.item()
 
         if confidence < threshold:
-            return "Not Recognized", "ਪਛਾਣਿਆ ਨਹੀਂ ਗਿਆ", confidence, display_img, hand_detected
+            return "Not Recognized", "ਪਛਾਣਿਆ ਨਹੀਂ ਗਿਆ", confidence, annotated_np, keypoints, detection_info
         else:
             predicted_label = id2label.get(str(predicted_index), "Unknown")
             punjabi_text = punjabi_translation.get(predicted_label, predicted_label)
-            return predicted_label, punjabi_text, confidence, display_img, hand_detected
+            return predicted_label, punjabi_text, confidence, annotated_np, keypoints, detection_info
 
     except Exception as e:
-        return "Error", str(e), 0.0, image, False
-
+        return "Error", str(e), 0.0, np.array(pil_image), [], {}
 
 # ------------------ Audio Generation ------------------
 def generate_audio(text):
@@ -249,6 +246,25 @@ def generate_audio(text):
     write(audio_filename, sampling_rate, waveform_int16)
     return audio_filename
 
+# ------------------ Run Pipeline on New Image ------------------
+def run_pipeline(pil_image: Image.Image):
+    """Run full pipeline and store all results in session_state."""
+    st.session_state.current_image = pil_image
+    st.session_state.audio_file = None
+
+    with st.spinner("🔍 Extracting landmarks & running inference..."):
+        label, punjabi, conf, annotated_np, keypoints, detection_info = perform_inference(pil_image)
+
+    st.session_state.predicted_label = label
+    st.session_state.punjabi_text = punjabi
+    st.session_state.confidence = conf
+    st.session_state.landmark_image = Image.fromarray(annotated_np)
+    st.session_state.keypoint_count = len(keypoints)
+    st.session_state.face_detected = detection_info.get("face", False)
+    st.session_state.pose_detected = detection_info.get("pose", False)
+    st.session_state.hand_detected = (
+        detection_info.get("left_hand", False) or detection_info.get("right_hand", False)
+    )
 
 # ------------------ Streamlit UI ------------------
 st.set_page_config(page_title="ISL to Punjabi Translator", layout="centered")
@@ -268,63 +284,67 @@ with col2:
             st.session_state.show_camera = False
             st.rerun()
 
+# ------------------ File Upload ------------------
 uploaded_file = st.file_uploader("📁 Upload Image", type=["jpg", "png", "jpeg"])
 
 if uploaded_file is not None:
-    image = Image.open(uploaded_file).convert('RGB')
     if st.session_state.last_upload != uploaded_file.name:
-        st.session_state.current_image = image
         st.session_state.last_upload = uploaded_file.name
-        st.session_state.audio_file = None
-        with st.spinner("🔍 Detecting hand region & running inference..."):
-            label, punjabi, conf, display_img, hand_detected = perform_inference(image)
-        st.session_state.predicted_label = label
-        st.session_state.punjabi_text = punjabi
-        st.session_state.confidence = conf
-        st.session_state.preprocessed_image = display_img
-        st.session_state.hand_detected = hand_detected
+        pil_image = Image.open(uploaded_file).convert('RGB')
+        run_pipeline(pil_image)
 
+# ------------------ Camera Capture ------------------
 elif st.session_state.show_camera:
-    capture_image = st.camera_input("Take a Picture")
-    if capture_image is not None:
-        st.session_state.latest_image = capture_image
+    captured = st.camera_input("Take a Picture")
+    if captured is not None:
+        st.session_state.latest_image = captured
         st.session_state.show_camera = False
         st.rerun()
 
 if st.session_state.latest_image is not None:
-    image = Image.open(st.session_state.latest_image).convert('RGB')
-    st.session_state.current_image = image
+    pil_image = Image.open(st.session_state.latest_image).convert('RGB')
     st.session_state.latest_image = None
-    st.session_state.audio_file = None
-    with st.spinner("🔍 Detecting hand region & running inference..."):
-        label, punjabi, conf, display_img, hand_detected = perform_inference(image)
-    st.session_state.predicted_label = label
-    st.session_state.punjabi_text = punjabi
-    st.session_state.confidence = conf
-    st.session_state.preprocessed_image = display_img
-    st.session_state.hand_detected = hand_detected
+    run_pipeline(pil_image)
 
 # ------------------ Display Results ------------------
 if st.session_state.current_image is not None:
-    col_orig, col_proc = st.columns(2)
-    with col_orig:
-        st.subheader("Original")
-        st.image(st.session_state.current_image, use_container_width=True)
-    with col_proc:
-        st.subheader("Hand Detection")
-        if st.session_state.preprocessed_image is not None:
-            st.image(st.session_state.preprocessed_image, use_container_width=True)
-            if st.session_state.get("hand_detected"):
-                st.caption("✅ Hand region detected")
-            else:
-                st.caption("⚠️ No hand detected — using centre crop")
 
+    col_orig, col_lm = st.columns(2)
+    with col_orig:
+        st.subheader("📷 Original")
+        st.image(st.session_state.current_image, use_container_width=True)
+    with col_lm:
+        st.subheader("🦴 Landmarks")
+        if st.session_state.landmark_image is not None:
+            st.image(st.session_state.landmark_image, use_container_width=True)
+
+    # Detection status badges
+    badges = []
+    if st.session_state.face_detected:
+        badges.append("✅ Face")
+    else:
+        badges.append("❌ Face")
+    if st.session_state.pose_detected:
+        badges.append("✅ Pose")
+    else:
+        badges.append("❌ Pose")
+    if st.session_state.hand_detected:
+        badges.append("✅ Hand(s)")
+    else:
+        badges.append("❌ Hand(s)")
+
+    st.caption(f"Detected: {' | '.join(badges)} | Keypoints: {st.session_state.keypoint_count}")
+
+    # Prediction results
     label = st.session_state.predicted_label
     punjabi = st.session_state.punjabi_text
     conf = st.session_state.confidence
 
+    st.divider()
+
     if label == "Not Recognized":
         st.error("❌ Sign not recognized (low confidence)")
+        st.info("Try a clearer image with better lighting and a visible hand gesture.")
     elif label == "Error":
         st.error(f"An error occurred: {punjabi}")
     else:

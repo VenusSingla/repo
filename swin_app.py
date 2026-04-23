@@ -5,7 +5,7 @@ from PIL import Image
 from transformers import AutoImageProcessor, SwinForImageClassification
 from transformers import VitsModel, AutoTokenizer
 from scipy.io.wavfile import write
-# import cv2
+# cv2 is NOT imported directly — opencv-python-headless handles it internally
 import mediapipe as mp
 import os
 from huggingface_hub import login

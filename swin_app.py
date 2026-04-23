@@ -129,24 +129,16 @@ def perform_inference(image, threshold=0.3):
         return "Error", str(e), 0.0
 
 # ------------------ Audio Generation ------------------
-audio_filename = "output_audio.wav"
-write(audio_filename, sampling_rate, waveform_np.T)
-# ------------------ Audio Generation ------------------
 def generate_audio(text):
     inputs = tokenizer(text, return_tensors="pt")
     with torch.no_grad():
         output = model_speech(**inputs).waveform
-    waveform_np = output.squeeze().cpu().numpy()  # remove batch dim safely
+    waveform_np = output.squeeze().cpu().numpy()
     sampling_rate = model_speech.config.sampling_rate
-    
-    # Use /tmp/ which is always writable on Streamlit Cloud
     audio_filename = "/tmp/output_audio.wav"
-    
-    # Normalize to int16 for proper WAV output
     waveform_int16 = (waveform_np * 32767).astype(np.int16)
     write(audio_filename, sampling_rate, waveform_int16)
     return audio_filename
-
 # ------------------ Process & Display ------------------
 def process_and_display(image):
     st.image(image, caption="Input Image", use_container_width=True)

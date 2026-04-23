@@ -194,7 +194,7 @@ def draw_landmarks(image, landmarks):
 
 # Inference function
 # Inference function
-async def perform_inference(image, threshold=0.3):  # Threshold can be tuned
+def perform_inference(image, threshold=0.3):  # Threshold can be tuned
     try:
         # Ensure the image is in RGB mode (convert if necessary)
         if image.mode != 'RGB':
@@ -284,7 +284,7 @@ if uploaded_file is not None:
             image = image.convert('RGB')
         st.image(image, caption="Processed Image", use_container_width=True)
         # Perform inference once
-        predicted_label, punjabi_translation, landmarks = asyncio.run(perform_inference(image))
+        predicted_label, punjabi_translation, landmarks = perform_inference(image)
         if landmarks:  # Check if landmarks are present
             image_with_landmarks = draw_landmarks(image.copy(), landmarks)
             st.image(image_with_landmarks, caption="Image with Landmarks", use_container_width=True)
@@ -321,7 +321,7 @@ if st.session_state.latest_image is not None:
         st.image(image, caption="Processed Image", use_container_width=True)
 
         # Perform inference
-        predicted_label, punjabi_translation, landmarks = asyncio.run(perform_inference(image))
+        predicted_label, punjabi_translation, landmarks = perform_inference(image)
 
         if landmarks:
             image_with_landmarks = draw_landmarks(image.copy(), landmarks)

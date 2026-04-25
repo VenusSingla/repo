@@ -3,11 +3,13 @@ import torch
 import numpy as np
 from PIL import Image
 from transformers import AutoImageProcessor, SwinForImageClassification
-from transformers import VitsModel, AutoTokenizer
-from scipy.io.wavfile import write
 from huggingface_hub import login
+from scipy.io.wavfile import write
 import cv2
 import mediapipe as mp
+
+# ── NEW: import custom TTS (punjabi_tts.py must be in the same directory) ──
+from punjabi_tts import get_punjabi_tts_streamlit
 
 # ------------------ MediaPipe Holistic Setup ------------------
 mp_drawing = mp.solutions.drawing_utils
@@ -24,6 +26,7 @@ def load_holistic():
 holistic = load_holistic()
 
 # ------------------ Load ML Models ------------------
+# VitsModel + AutoTokenizer removed — replaced by PunjabiTTS below.
 @st.cache_resource
 def load_models():
     hf_token = st.secrets.get("HF_TOKEN", None)
@@ -36,18 +39,19 @@ def load_models():
         processor = AutoImageProcessor.from_pretrained(
             "vsingla/Swin_transformer", token=hf_token
         )
-        model_speech = VitsModel.from_pretrained(
-            "facebook/mms-tts-pan", token=hf_token
-        )
-        tokenizer = AutoTokenizer.from_pretrained(
-            "facebook/mms-tts-pan", token=hf_token
-        )
-        return model, processor, model_speech, tokenizer
+        return model, processor
     except OSError as e:
         st.error(f"❌ Failed to load models.\n\nDetails: {str(e)}")
         st.stop()
 
-model, processor, model_speech, tokenizer = load_models()
+model, processor = load_models()
+
+# ------------------ Load TTS (cached so it doesn't reload on every click) --
+@st.cache_resource
+def load_tts():
+    return get_punjabi_tts_streamlit()
+
+tts = load_tts()
 
 # ------------------ Punjabi Translation Map ------------------
 punjabi_translation = {
@@ -137,9 +141,7 @@ for key, default in {
 
 # ------------------ Draw Landmarks ------------------
 def draw_styled_landmarks(image_rgb, results):
-    """Draw face, pose, left hand, right hand landmarks on image."""
     annotated = image_rgb.copy()
-
     if results.face_landmarks:
         mp_drawing.draw_landmarks(
             annotated, results.face_landmarks,
@@ -172,13 +174,8 @@ def draw_styled_landmarks(image_rgb, results):
 
 # ------------------ Extract Keypoints ------------------
 def extract_keypoints(image_rgb):
-    """
-    Run MediaPipe Holistic on an RGB numpy array.
-    Returns annotated image, keypoints list, and detection flags.
-    """
     results = holistic.process(image_rgb)
     annotated = draw_styled_landmarks(image_rgb, results)
-
     keypoints = []
     if results.pose_landmarks:
         for lm in results.pose_landmarks.landmark:
@@ -189,14 +186,12 @@ def extract_keypoints(image_rgb):
     if results.right_hand_landmarks:
         for lm in results.right_hand_landmarks.landmark:
             keypoints.append((lm.x, lm.y, lm.z))
-
     detection_info = {
-        "face": results.face_landmarks is not None,
-        "pose": results.pose_landmarks is not None,
-        "left_hand": results.left_hand_landmarks is not None,
+        "face":       results.face_landmarks is not None,
+        "pose":       results.pose_landmarks is not None,
+        "left_hand":  results.left_hand_landmarks is not None,
         "right_hand": results.right_hand_landmarks is not None,
     }
-
     return annotated, keypoints, detection_info
 
 # ------------------ Inference ------------------
@@ -204,18 +199,10 @@ def perform_inference(pil_image: Image.Image, threshold=0.3):
     try:
         if pil_image.mode != 'RGB':
             pil_image = pil_image.convert('RGB')
-
-        # Convert PIL → numpy RGB for MediaPipe
         image_np = np.array(pil_image)
-
-        # Step 1: Extract landmarks with MediaPipe Holistic
         annotated_np, keypoints, detection_info = extract_keypoints(image_np)
-
-        # Step 2: Convert annotated image back to PIL for Swin input
-        # Using the landmark-annotated image gives the model richer spatial info
         annotated_pil = Image.fromarray(annotated_np)
 
-        # Step 3: Run Swin Transformer classification
         inputs = processor(images=annotated_pil, return_tensors="pt")
         with torch.no_grad():
             outputs = model(**inputs)
@@ -225,69 +212,56 @@ def perform_inference(pil_image: Image.Image, threshold=0.3):
             confidence = predicted_probs.item()
 
         if confidence < threshold:
-            return "Not Recognized", "ਪਛਾਣਿਆ ਨਹੀਂ ਗਿਆ", confidence, annotated_np, keypoints, detection_info
-        else:
-            predicted_label = id2label.get(str(predicted_index), "Unknown")
-            punjabi_text = punjabi_translation.get(predicted_label, predicted_label)
-            return predicted_label, punjabi_text, confidence, annotated_np, keypoints, detection_info
+            return ("Not Recognized", "ਪਛਾਣਿਆ ਨਹੀਂ ਗਿਆ", confidence,
+                    annotated_np, keypoints, detection_info)
+
+        predicted_label = id2label.get(str(predicted_index), "Unknown")
+        punjabi_text = punjabi_translation.get(predicted_label, predicted_label)
+        return predicted_label, punjabi_text, confidence, annotated_np, keypoints, detection_info
 
     except Exception as e:
         return "Error", str(e), 0.0, np.array(pil_image), [], {}
 
 # ------------------ Audio Generation ------------------
-def generate_audio(text):
-    try:
-        inputs = tokenizer(text, return_tensors="pt")
-        
-        with torch.no_grad():
-            output = model_speech(**inputs)
-        
-        # VITS returns waveform of shape [1, 1, samples] or [1, samples]
-        waveform = output.waveform
-        
-        # Safely squeeze all extra dimensions → 1D array
-        waveform_np = waveform.squeeze().cpu().numpy()
-        
-        # If still 2D for some reason, take first channel
-        if waveform_np.ndim == 2:
-            waveform_np = waveform_np[0]
-        
-        # Normalize to [-1, 1] to avoid clipping/distortion
-        max_val = np.abs(waveform_np).max()
-        if max_val > 0:
-            waveform_np = waveform_np / max_val
-        
-        # Scale to int16 range with slight headroom to avoid clipping
-        waveform_int16 = (waveform_np * 32000).astype(np.int16)
-        
-        sampling_rate = model_speech.config.sampling_rate
-        audio_filename = "/tmp/output_audio.wav"
-        write(audio_filename, sampling_rate, waveform_int16)
-        
-        return audio_filename
+# Replaced VitsModel with the custom PunjabiTTS pipeline.
+# Two modes available — choose based on your preference:
+#   tts.synthesize_gtts_full(text)  → whole-sentence gTTS  (fastest, most natural)
+#   tts.synthesize(text)            → full Singh & Lehal pipeline (word-level gTTS fallback)
+AUDIO_OUTPUT = "/tmp/output_audio.wav"
 
+def generate_audio(text: str) -> str | None:
+    """
+    Synthesise Punjabi text to speech using PunjabiTTS.
+    Returns the path to the output WAV file, or None on failure.
+    """
+    try:
+        # synthesize_gtts_full gives the cleanest output without a syllable DB.
+        # Switch to tts.synthesize(text) once you have the syllable database.
+        tts.output_path = AUDIO_OUTPUT
+        wav_path = tts.synthesize_gtts_full(text)
+        return wav_path
     except Exception as e:
         st.error(f"Audio generation failed: {str(e)}")
         return None
 
 # ------------------ Run Pipeline on New Image ------------------
 def run_pipeline(pil_image: Image.Image):
-    """Run full pipeline and store all results in session_state."""
     st.session_state.current_image = pil_image
     st.session_state.audio_file = None
 
     with st.spinner("🔍 Extracting landmarks & running inference..."):
         label, punjabi, conf, annotated_np, keypoints, detection_info = perform_inference(pil_image)
 
-    st.session_state.predicted_label = label
-    st.session_state.punjabi_text = punjabi
-    st.session_state.confidence = conf
-    st.session_state.landmark_image = Image.fromarray(annotated_np)
-    st.session_state.keypoint_count = len(keypoints)
-    st.session_state.face_detected = detection_info.get("face", False)
-    st.session_state.pose_detected = detection_info.get("pose", False)
-    st.session_state.hand_detected = (
-        detection_info.get("left_hand", False) or detection_info.get("right_hand", False)
+    st.session_state.predicted_label  = label
+    st.session_state.punjabi_text     = punjabi
+    st.session_state.confidence       = conf
+    st.session_state.landmark_image   = Image.fromarray(annotated_np)
+    st.session_state.keypoint_count   = len(keypoints)
+    st.session_state.face_detected    = detection_info.get("face", False)
+    st.session_state.pose_detected    = detection_info.get("pose", False)
+    st.session_state.hand_detected    = (
+        detection_info.get("left_hand", False) or
+        detection_info.get("right_hand", False)
     )
 
 # ------------------ Streamlit UI ------------------
@@ -342,27 +316,23 @@ if st.session_state.current_image is not None:
         if st.session_state.landmark_image is not None:
             st.image(st.session_state.landmark_image, use_container_width=True)
 
-    # Detection status badges
     badges = []
-    if st.session_state.face_detected:
-        badges.append("✅ Face")
-    else:
-        badges.append("❌ Face")
-    if st.session_state.pose_detected:
-        badges.append("✅ Pose")
-    else:
-        badges.append("❌ Pose")
-    if st.session_state.hand_detected:
-        badges.append("✅ Hand(s)")
-    else:
-        badges.append("❌ Hand(s)")
+    for flag, label_str in [
+        ("face_detected",  "Face"),
+        ("pose_detected",  "Pose"),
+        ("hand_detected",  "Hand(s)"),
+    ]:
+        icon = "✅" if st.session_state[flag] else "❌"
+        badges.append(f"{icon} {label_str}")
 
-    st.caption(f"Detected: {' | '.join(badges)} | Keypoints: {st.session_state.keypoint_count}")
+    st.caption(
+        f"Detected: {' | '.join(badges)} | "
+        f"Keypoints: {st.session_state.keypoint_count}"
+    )
 
-    # Prediction results
-    label = st.session_state.predicted_label
+    label   = st.session_state.predicted_label
     punjabi = st.session_state.punjabi_text
-    conf = st.session_state.confidence
+    conf    = st.session_state.confidence
 
     st.divider()
 
@@ -380,6 +350,6 @@ if st.session_state.current_image is not None:
             audio_file = generate_audio(st.session_state.punjabi_text)
             if audio_file:
                 st.session_state.audio_file = audio_file
-    
+
     if st.session_state.audio_file:
         st.audio(st.session_state.audio_file, format="audio/wav")

@@ -63,12 +63,19 @@ def _tts_preprocess(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def _gtts_to_bytes(text: str):
+def _gtts_to_bytes(text: str) -> bytes:
     """
     Synthesise Punjabi text via gTTS and return raw MP3 bytes.
-    Uses BytesIO so no file-path or /tmp permission issues.
-    Results cached in _TTS_MEM and to disk for reuse.
+
+    Uses gTTS.save() → named temp file → read bytes → delete temp.
+    write_to_fp(BytesIO) can silently produce 0 bytes in certain
+    environments; save() is the most tested and reliable gTTS path.
+    Exceptions propagate directly so callers can show them in the UI.
+    Results are cached in memory and on disk (/tmp) for reuse.
     """
+    import tempfile
+    from gtts import gTTS
+
     cache_key = f"bytes:{text}"
     if cache_key in _TTS_MEM:
         return _TTS_MEM[cache_key]
@@ -77,33 +84,44 @@ def _gtts_to_bytes(text: str):
                   text.encode("unicode_escape").decode("ascii"))[:80]
     cache_file = os.path.join(_TTS_CACHE_DIR, f"pa_{safe}.mp3")
 
+    # Disk cache hit — read and return
     if os.path.exists(cache_file) and os.path.getsize(cache_file) > 0:
         with open(cache_file, "rb") as f:
             data = f.read()
         _TTS_MEM[cache_key] = data
         return data
 
+    # Generate: save() to a real named temp file, then read bytes
+    tmp_path = None
     try:
-        from gtts import gTTS
-        import io
-        buf = io.BytesIO()
-        gTTS(text=text, lang="pa", slow=False).write_to_fp(buf)
-        buf.seek(0)
-        data = buf.read()
-        if len(data) > 0:
-            with open(cache_file, "wb") as f:
-                f.write(data)
-            _TTS_MEM[cache_key] = data
-            return data
-        print(f"[TTS] gTTS returned 0 bytes for: {text!r}")
-    except Exception as e:
-        print(f"[TTS] gTTS failed for {text!r}: {e}")
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
+            tmp_path = tmp.name
+        gTTS(text=text, lang="pa", slow=False).save(tmp_path)
+        with open(tmp_path, "rb") as f:
+            data = f.read()
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
 
-    return None
+    if len(data) == 0:
+        raise RuntimeError(
+            f"gTTS.save() produced 0 bytes for {text!r}. "
+            "This usually means a network/firewall issue blocked the Google TTS API."
+        )
+
+    # Persist to disk cache (non-fatal if it fails)
+    try:
+        with open(cache_file, "wb") as f:
+            f.write(data)
+    except OSError:
+        pass
+
+    _TTS_MEM[cache_key] = data
+    return data
 
 
-def synthesize_punjabi(text: str):
-    """Preprocess + synthesise. Returns raw MP3 bytes or None."""
+def synthesize_punjabi(text: str) -> bytes:
+    """Preprocess + synthesise. Returns raw MP3 bytes. Raises on failure."""
     return _gtts_to_bytes(_tts_preprocess(text))
 
 
@@ -323,24 +341,26 @@ def perform_inference(pil_image: Image.Image, threshold: float = 0.3):
 def generate_audio(text: str):
     """
     Returns raw MP3 bytes for st.audio(), or None on failure.
-    Errors are surfaced visibly — nothing fails silently.
+    Every failure path shows the REAL error in the UI.
     """
     if not text or not text.strip():
         st.error("No Punjabi text to synthesise.")
         return None
+
     try:
-        from gtts import gTTS  # noqa — confirm importable
+        from gtts import gTTS  # noqa
     except ImportError:
-        st.error("gtts not installed. Run: pip install gtts")
+        st.error("gtts not installed. Add  to requirements.txt and redeploy.")
         return None
+
     try:
         data = synthesize_punjabi(text)
-        if not data:
-            st.error("Audio synthesis returned empty data. Check internet connectivity.")
-            return None
         return data
     except Exception as e:
-        st.error(f"Audio generation failed: {e}")
+        # Show the full real error — gTTS network errors, SSL issues etc.
+        import traceback
+        st.error(f"TTS failed: {type(e).__name__}: {e}")
+        st.code(traceback.format_exc(), language="")
         return None
 
 

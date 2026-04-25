@@ -1,194 +1,55 @@
-import os
-import re
-import warnings
-warnings.filterwarnings("ignore")
-
 import streamlit as st
 import torch
 import numpy as np
 from PIL import Image
 from transformers import AutoImageProcessor, SwinForImageClassification
+from transformers import VitsModel, AutoTokenizer
+from scipy.io.wavfile import write
 from huggingface_hub import login
-from scipy.io.wavfile import write as wavwrite, read as wavread
-from scipy.signal import resample
+import cv2
 import mediapipe as mp
 
-# ═══════════════════════════════════════════════════════════════════════════
-#  PUNJABI TTS  (inlined — no separate punjabi_tts.py needed in repo)
-#  Based on: Singh & Lehal (2012), COLING 2012
-# ═══════════════════════════════════════════════════════════════════════════
-
-_ABBR = {
-    "ਡਾ.": "ਡਾਕਟਰ", "ਸ੍ਰ.": "ਸਰਦਾਰ", "ਪ੍ਰੋ.": "ਪ੍ਰੋਫੈਸਰ",
-    "ਸ਼੍ਰੀ": "ਸ਼੍ਰੀਮਾਨ", "ਕਿ.ਮੀ.": "ਕਿਲੋਮੀਟਰ", "ਰੁ.": "ਰੁਪਏ",
-}
-_GUR_DIGITS = {"੦":"0","੧":"1","੨":"2","੩":"3","੪":"4",
-               "੫":"5","੬":"6","੭":"7","੮":"8","੯":"9"}
-_ONES_PA = ["","ਇੱਕ","ਦੋ","ਤਿੰਨ","ਚਾਰ","ਪੰਜ","ਛੇ","ਸੱਤ","ਅੱਠ","ਨੌਂ","ਦਸ",
-            "ਗਿਆਰਾਂ","ਬਾਰਾਂ","ਤੇਰਾਂ","ਚੌਦਾਂ","ਪੰਦਰਾਂ","ਸੋਲਾਂ","ਸਤਾਰਾਂ","ਅਠਾਰਾਂ","ਉਨੀ","ਵੀਹ"]
-_TENS_PA = ["","","ਵੀਹ","ਤੀਹ","ਚਾਲੀ","ਪੰਜਾਹ","ਸੱਠ","ਸੱਤਰ","ਅੱਸੀ","ਨੱਬੇ"]
-
-_TTS_SR        = 22050
-_TTS_CACHE_DIR = "/tmp/pa_tts_cache"
-_TTS_MEM: dict = {}
-os.makedirs(_TTS_CACHE_DIR, exist_ok=True)
-
-
-def _num_to_pa(n: int) -> str:
-    if n == 0:
-        return "ਜ਼ੀਰੋ"
-    parts = []
-    if n >= 100:
-        parts.append(_ONES_PA[n // 100] + " ਸੌ")
-        n %= 100
-    if n >= 21:
-        t, o = n // 10, n % 10
-        parts.append(_TENS_PA[t] if o == 0 else _TENS_PA[t] + " " + _ONES_PA[o])
-    elif n > 0:
-        parts.append(_ONES_PA[n])
-    return " ".join(parts)
-
-
-def _tts_preprocess(text: str) -> str:
-    for a, f in _ABBR.items():
-        text = text.replace(a, f)
-    def _exp(m):
-        s = m.group(0)
-        for g, a in _GUR_DIGITS.items():
-            s = s.replace(g, a)
-        try:
-            return _num_to_pa(int(s))
-        except ValueError:
-            return s
-    text = re.sub("[੦-੯0-9]+", _exp, text)
-    text = re.sub(r"[।॥,;:!?\"'()\[\]{}<>]", " ", text)
-    return re.sub(r"\s+", " ", text).strip()
-
-
-def _normalize_wav(data: np.ndarray, sr: int) -> np.ndarray:
-    if data.ndim > 1:
-        data = data[:, 0]
-    if sr != _TTS_SR:
-        data = resample(data, int(len(data) * _TTS_SR / sr))
-    peak = np.abs(data).max()
-    return (data / peak if peak > 0 else data).astype(np.float32)
-
-
-def _mp3_to_wav(mp3_path: str):
-    """Try pydub then ffmpeg to decode MP3. Returns float32 array or None."""
-    try:
-        from pydub import AudioSegment
-        audio = (AudioSegment.from_mp3(mp3_path)
-                 .set_frame_rate(_TTS_SR).set_channels(1))
-        samples = np.array(audio.get_array_of_samples(), dtype=np.float32)
-        return _normalize_wav(samples, _TTS_SR)
-    except Exception:
-        pass
-    try:
-        import subprocess, tempfile
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as t:
-            wp = t.name
-        subprocess.run(
-            ["ffmpeg", "-y", "-i", mp3_path, "-ar", str(_TTS_SR), "-ac", "1", wp],
-            capture_output=True, check=True,
-        )
-        sr, data = wavread(wp)
-        os.unlink(wp)
-        return _normalize_wav(data.astype(np.float32), sr)
-    except Exception:
-        pass
-    return None
-
-
-def _gtts_synthesize(text: str) -> np.ndarray:
-    """Synthesise Punjabi text via gTTS (whole phrase). Disk-cached."""
-    safe = re.sub(r"[^a-zA-Z0-9_]", "_",
-                  text.encode("unicode_escape").decode("ascii"))[:80]
-    cache_file = os.path.join(_TTS_CACHE_DIR, f"pa_{safe}.wav")
-
-    if cache_file in _TTS_MEM:
-        return _TTS_MEM[cache_file]
-    if os.path.exists(cache_file):
-        sr, data = wavread(cache_file)
-        wav = _normalize_wav(data.astype(np.float32), sr)
-        _TTS_MEM[cache_file] = wav
-        return wav
-
-    try:
-        from gtts import gTTS
-        import tempfile
-        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as t:
-            mp3 = t.name
-        gTTS(text=text, lang="pa", slow=False).save(mp3)
-        wav = _mp3_to_wav(mp3)
-        os.unlink(mp3)
-        if wav is not None:
-            wavwrite(cache_file, _TTS_SR, (wav * 32767).astype(np.int16))
-            _TTS_MEM[cache_file] = wav
-            return wav
-    except Exception as e:
-        print(f"[TTS] gTTS error for '{text}': {e}")
-
-    silence = np.zeros(int(_TTS_SR * 0.3), dtype=np.float32)
-    _TTS_MEM[cache_file] = silence
-    return silence
-
-
-def synthesize_punjabi(text: str,
-                       output_path: str = "/tmp/output_audio.wav") -> str:
-    """Preprocess Punjabi text, synthesise via gTTS, write WAV. Returns path."""
-    wav = _gtts_synthesize(_tts_preprocess(text))
-    wavwrite(output_path, _TTS_SR, (wav * 32000).astype(np.int16))
-    return output_path
-
-
-# ═══════════════════════════════════════════════════════════════════════════
-#  MEDIAPIPE HOLISTIC SETUP
-# ═══════════════════════════════════════════════════════════════════════════
-
+# ------------------ MediaPipe Holistic Setup ------------------
 mp_drawing = mp.solutions.drawing_utils
 mp_holistic = mp.solutions.holistic
-
 
 @st.cache_resource
 def load_holistic():
     return mp_holistic.Holistic(
         static_image_mode=True,
         min_detection_confidence=0.5,
-        min_tracking_confidence=0.5,
+        min_tracking_confidence=0.5
     )
 
 holistic = load_holistic()
 
-
-# ═══════════════════════════════════════════════════════════════════════════
-#  LOAD ML MODELS  (Swin only — VitsModel removed)
-# ═══════════════════════════════════════════════════════════════════════════
-
+# ------------------ Load ML Models ------------------
 @st.cache_resource
 def load_models():
     hf_token = st.secrets.get("HF_TOKEN", None)
     if hf_token:
         login(token=hf_token)
     try:
-        swin = SwinForImageClassification.from_pretrained(
+        model = SwinForImageClassification.from_pretrained(
             "vsingla/Swin_transformer", token=hf_token
         )
-        proc = AutoImageProcessor.from_pretrained(
+        processor = AutoImageProcessor.from_pretrained(
             "vsingla/Swin_transformer", token=hf_token
         )
-        return swin, proc
+        model_speech = VitsModel.from_pretrained(
+            "facebook/mms-tts-pan", token=hf_token
+        )
+        tokenizer = AutoTokenizer.from_pretrained(
+            "facebook/mms-tts-pan", token=hf_token
+        )
+        return model, processor, model_speech, tokenizer
     except OSError as e:
-        st.error(f"Failed to load models: {e}")
+        st.error(f"❌ Failed to load models.\n\nDetails: {str(e)}")
         st.stop()
 
-model, processor = load_models()
+model, processor, model_speech, tokenizer = load_models()
 
-
-# ═══════════════════════════════════════════════════════════════════════════
-#  TRANSLATION & LABEL MAPS
-# ═══════════════════════════════════════════════════════════════════════════
-
+# ------------------ Punjabi Translation Map ------------------
 punjabi_translation = {
     'ACCIDENT': 'ਹਾਦਸਾ', 'AEROPLANE': 'ਹਵਾਈ ਜਹਾਜ਼', 'AFRAID': 'ਡਰ', 'AGREE': 'ਸਹਿਮਤ',
     'ALL': 'ਸਾਰੇ', 'ANGRY': 'ਗੁੱਸਾ', 'ANYTHING': 'ਕੁਝ ਵੀ', 'APPRECIATE': 'ਸਰਾਹਨਾ',
@@ -222,9 +83,10 @@ punjabi_translation = {
     'TRAIN': 'ਰੇਲਗੱਡੀ', 'TRUST': 'ਭਰੋਸਾ', 'TRUTH': 'ਸੱਚ', 'TURN ON': 'ਚਾਲੂ ਕਰੋ',
     'UNDERSTAND': 'ਸਮਝ', 'WANT': 'ਚਾਹੁੰਦੇ', 'WATER': 'ਪਾਣੀ', 'WEAR': 'ਪਹਿਨੋ',
     'WELCOME': 'ਜੀ ਆਇਆ ਨੂੰ', 'WHAT': 'ਕੀ', 'WHERE': 'ਕਿੱਥੇ', 'WHO': 'ਕੌਣ',
-    'WORRY': 'ਚਿੰਤਾ', 'YOU YOUR': 'ਤੁਸੀਂ',
+    'WORRY': 'ਚਿੰਤਾ', 'YOU YOUR': 'ਤੁਸੀਂ'
 }
 
+# ------------------ Label Mapping ------------------
 id2label = {
     '0': 'ACCIDENT', '1': 'AEROPLANE', '2': 'AFRAID', '3': 'AGREE', '4': 'ALL',
     '5': 'ANGRY', '6': 'ANYTHING', '7': 'APPRECIATE', '8': 'BABY', '9': 'BAD',
@@ -251,186 +113,224 @@ id2label = {
     '110': 'THAT', '111': 'THINGS', '112': 'THINK', '113': 'THIRSTY', '114': 'TIRED',
     '115': 'TODAY', '116': 'TRAIN', '117': 'TRUST', '118': 'TRUTH', '119': 'TURN ON',
     '120': 'UNDERSTAND', '121': 'WANT', '122': 'WATER', '123': 'WEAR', '124': 'WELCOME',
-    '125': 'WHAT', '126': 'WHERE', '127': 'WHO', '128': 'WORRY', '129': 'YOU YOUR',
+    '125': 'WHAT', '126': 'WHERE', '127': 'WHO', '128': 'WORRY', '129': 'YOU YOUR'
 }
 
-
-# ═══════════════════════════════════════════════════════════════════════════
-#  SESSION STATE
-# ═══════════════════════════════════════════════════════════════════════════
-
-for _k, _v in {
-    "latest_image": None, "show_camera": False, "current_image": None,
-    "landmark_image": None, "predicted_label": None, "punjabi_text": None,
-    "confidence": None, "audio_file": None, "last_upload": None,
-    "keypoint_count": 0, "hand_detected": False,
-    "pose_detected": False, "face_detected": False,
+# ------------------ Session State Init ------------------
+for key, default in {
+    "latest_image": None,
+    "show_camera": False,
+    "current_image": None,
+    "landmark_image": None,
+    "predicted_label": None,
+    "punjabi_text": None,
+    "confidence": None,
+    "audio_file": None,
+    "last_upload": None,
+    "keypoint_count": 0,
+    "hand_detected": False,
+    "pose_detected": False,
+    "face_detected": False,
 }.items():
-    if _k not in st.session_state:
-        st.session_state[_k] = _v
+    if key not in st.session_state:
+        st.session_state[key] = default
 
-
-# ═══════════════════════════════════════════════════════════════════════════
-#  MEDIAPIPE HELPERS
-# ═══════════════════════════════════════════════════════════════════════════
-
+# ------------------ Draw Landmarks ------------------
 def draw_styled_landmarks(image_rgb, results):
+    """Draw face, pose, left hand, right hand landmarks on image."""
     annotated = image_rgb.copy()
+
     if results.face_landmarks:
         mp_drawing.draw_landmarks(
-            annotated, results.face_landmarks, mp_holistic.FACEMESH_TESSELATION,
+            annotated, results.face_landmarks,
+            mp_holistic.FACEMESH_TESSELATION,
             mp_drawing.DrawingSpec(color=(80, 110, 10), thickness=1, circle_radius=1),
-            mp_drawing.DrawingSpec(color=(80, 256, 121), thickness=1, circle_radius=1),
+            mp_drawing.DrawingSpec(color=(80, 256, 121), thickness=1, circle_radius=1)
         )
     if results.pose_landmarks:
         mp_drawing.draw_landmarks(
-            annotated, results.pose_landmarks, mp_holistic.POSE_CONNECTIONS,
+            annotated, results.pose_landmarks,
+            mp_holistic.POSE_CONNECTIONS,
             mp_drawing.DrawingSpec(color=(80, 22, 10), thickness=2, circle_radius=4),
-            mp_drawing.DrawingSpec(color=(80, 44, 121), thickness=2, circle_radius=2),
+            mp_drawing.DrawingSpec(color=(80, 44, 121), thickness=2, circle_radius=2)
         )
     if results.left_hand_landmarks:
         mp_drawing.draw_landmarks(
-            annotated, results.left_hand_landmarks, mp_holistic.HAND_CONNECTIONS,
+            annotated, results.left_hand_landmarks,
+            mp_holistic.HAND_CONNECTIONS,
             mp_drawing.DrawingSpec(color=(121, 22, 76), thickness=2, circle_radius=4),
-            mp_drawing.DrawingSpec(color=(121, 44, 250), thickness=2, circle_radius=2),
+            mp_drawing.DrawingSpec(color=(121, 44, 250), thickness=2, circle_radius=2)
         )
     if results.right_hand_landmarks:
         mp_drawing.draw_landmarks(
-            annotated, results.right_hand_landmarks, mp_holistic.HAND_CONNECTIONS,
+            annotated, results.right_hand_landmarks,
+            mp_holistic.HAND_CONNECTIONS,
             mp_drawing.DrawingSpec(color=(245, 117, 66), thickness=2, circle_radius=4),
-            mp_drawing.DrawingSpec(color=(245, 66, 230), thickness=2, circle_radius=2),
+            mp_drawing.DrawingSpec(color=(245, 66, 230), thickness=2, circle_radius=2)
         )
     return annotated
 
-
+# ------------------ Extract Keypoints ------------------
 def extract_keypoints(image_rgb):
+    """
+    Run MediaPipe Holistic on an RGB numpy array.
+    Returns annotated image, keypoints list, and detection flags.
+    """
     results = holistic.process(image_rgb)
     annotated = draw_styled_landmarks(image_rgb, results)
+
     keypoints = []
-    for attr in ("pose_landmarks", "left_hand_landmarks", "right_hand_landmarks"):
-        lms = getattr(results, attr)
-        if lms:
-            keypoints.extend((lm.x, lm.y, lm.z) for lm in lms.landmark)
+    if results.pose_landmarks:
+        for lm in results.pose_landmarks.landmark:
+            keypoints.append((lm.x, lm.y, lm.z))
+    if results.left_hand_landmarks:
+        for lm in results.left_hand_landmarks.landmark:
+            keypoints.append((lm.x, lm.y, lm.z))
+    if results.right_hand_landmarks:
+        for lm in results.right_hand_landmarks.landmark:
+            keypoints.append((lm.x, lm.y, lm.z))
+
     detection_info = {
-        "face":       results.face_landmarks is not None,
-        "pose":       results.pose_landmarks is not None,
-        "left_hand":  results.left_hand_landmarks is not None,
+        "face": results.face_landmarks is not None,
+        "pose": results.pose_landmarks is not None,
+        "left_hand": results.left_hand_landmarks is not None,
         "right_hand": results.right_hand_landmarks is not None,
     }
+
     return annotated, keypoints, detection_info
 
-
-# ═══════════════════════════════════════════════════════════════════════════
-#  INFERENCE
-# ═══════════════════════════════════════════════════════════════════════════
-
-def perform_inference(pil_image: Image.Image, threshold: float = 0.3):
+# ------------------ Inference ------------------
+def perform_inference(pil_image: Image.Image, threshold=0.3):
     try:
-        if pil_image.mode != "RGB":
-            pil_image = pil_image.convert("RGB")
+        if pil_image.mode != 'RGB':
+            pil_image = pil_image.convert('RGB')
+
+        # Convert PIL → numpy RGB for MediaPipe
         image_np = np.array(pil_image)
+
+        # Step 1: Extract landmarks with MediaPipe Holistic
         annotated_np, keypoints, detection_info = extract_keypoints(image_np)
 
-        inputs = processor(images=Image.fromarray(annotated_np), return_tensors="pt")
+        # Step 2: Convert annotated image back to PIL for Swin input
+        # Using the landmark-annotated image gives the model richer spatial info
+        annotated_pil = Image.fromarray(annotated_np)
+
+        # Step 3: Run Swin Transformer classification
+        inputs = processor(images=annotated_pil, return_tensors="pt")
         with torch.no_grad():
             outputs = model(**inputs)
-            probs = torch.nn.functional.softmax(outputs.logits, dim=-1)
-            top_prob, top_idx = torch.max(probs, dim=1)
-            confidence = top_prob.item()
-            predicted_index = top_idx.item()
+            predictions = torch.nn.functional.softmax(outputs.logits, dim=-1)
+            predicted_probs, predicted_index = torch.max(predictions, dim=1)
+            predicted_index = predicted_index.item()
+            confidence = predicted_probs.item()
 
         if confidence < threshold:
-            return ("Not Recognized", "ਪਛਾਣਿਆ ਨਹੀਂ ਗਿਆ",
-                    confidence, annotated_np, keypoints, detection_info)
-
-        label   = id2label.get(str(predicted_index), "Unknown")
-        punjabi = punjabi_translation.get(label, label)
-        return label, punjabi, confidence, annotated_np, keypoints, detection_info
+            return "Not Recognized", "ਪਛਾਣਿਆ ਨਹੀਂ ਗਿਆ", confidence, annotated_np, keypoints, detection_info
+        else:
+            predicted_label = id2label.get(str(predicted_index), "Unknown")
+            punjabi_text = punjabi_translation.get(predicted_label, predicted_label)
+            return predicted_label, punjabi_text, confidence, annotated_np, keypoints, detection_info
 
     except Exception as e:
         return "Error", str(e), 0.0, np.array(pil_image), [], {}
 
-
-# ═══════════════════════════════════════════════════════════════════════════
-#  AUDIO GENERATION
-# ═══════════════════════════════════════════════════════════════════════════
-
-_AUDIO_OUTPUT = "/tmp/output_audio.wav"
-
-def generate_audio(text: str):
+# ------------------ Audio Generation ------------------
+def generate_audio(text):
     try:
-        return synthesize_punjabi(text, output_path=_AUDIO_OUTPUT)
+        inputs = tokenizer(text, return_tensors="pt")
+        
+        with torch.no_grad():
+            output = model_speech(**inputs)
+        
+        # VITS returns waveform of shape [1, 1, samples] or [1, samples]
+        waveform = output.waveform
+        
+        # Safely squeeze all extra dimensions → 1D array
+        waveform_np = waveform.squeeze().cpu().numpy()
+        
+        # If still 2D for some reason, take first channel
+        if waveform_np.ndim == 2:
+            waveform_np = waveform_np[0]
+        
+        # Normalize to [-1, 1] to avoid clipping/distortion
+        max_val = np.abs(waveform_np).max()
+        if max_val > 0:
+            waveform_np = waveform_np / max_val
+        
+        # Scale to int16 range with slight headroom to avoid clipping
+        waveform_int16 = (waveform_np * 32000).astype(np.int16)
+        
+        sampling_rate = model_speech.config.sampling_rate
+        audio_filename = "/tmp/output_audio.wav"
+        write(audio_filename, sampling_rate, waveform_int16)
+        
+        return audio_filename
+
     except Exception as e:
-        st.error(f"Audio generation failed: {e}")
+        st.error(f"Audio generation failed: {str(e)}")
         return None
 
-
-# ═══════════════════════════════════════════════════════════════════════════
-#  PIPELINE RUNNER
-# ═══════════════════════════════════════════════════════════════════════════
-
+# ------------------ Run Pipeline on New Image ------------------
 def run_pipeline(pil_image: Image.Image):
+    """Run full pipeline and store all results in session_state."""
     st.session_state.current_image = pil_image
-    st.session_state.audio_file    = None
+    st.session_state.audio_file = None
 
     with st.spinner("🔍 Extracting landmarks & running inference..."):
-        label, punjabi, conf, annotated_np, keypoints, detection_info = \
-            perform_inference(pil_image)
+        label, punjabi, conf, annotated_np, keypoints, detection_info = perform_inference(pil_image)
 
     st.session_state.predicted_label = label
-    st.session_state.punjabi_text    = punjabi
-    st.session_state.confidence      = conf
-    st.session_state.landmark_image  = Image.fromarray(annotated_np)
-    st.session_state.keypoint_count  = len(keypoints)
-    st.session_state.face_detected   = detection_info.get("face", False)
-    st.session_state.pose_detected   = detection_info.get("pose", False)
-    st.session_state.hand_detected   = (
-        detection_info.get("left_hand", False) or
-        detection_info.get("right_hand", False)
+    st.session_state.punjabi_text = punjabi
+    st.session_state.confidence = conf
+    st.session_state.landmark_image = Image.fromarray(annotated_np)
+    st.session_state.keypoint_count = len(keypoints)
+    st.session_state.face_detected = detection_info.get("face", False)
+    st.session_state.pose_detected = detection_info.get("pose", False)
+    st.session_state.hand_detected = (
+        detection_info.get("left_hand", False) or detection_info.get("right_hand", False)
     )
 
-
-# ═══════════════════════════════════════════════════════════════════════════
-#  STREAMLIT UI
-# ═══════════════════════════════════════════════════════════════════════════
-
+# ------------------ Streamlit UI ------------------
 st.set_page_config(page_title="ISL to Punjabi Translator", layout="centered")
 st.title("🖐️ Sanket2Shabd")
 st.write("Upload an image or capture from webcam to translate Indian Sign Language to Punjabi.")
 
-col1, col2 = st.columns(2)
+col1, col2 = st.columns([1, 1])
 with col1:
     if st.button("📷 Capture Image"):
-        st.session_state.show_camera    = True
-        st.session_state.current_image  = None
+        st.session_state.show_camera = True
+        st.session_state.current_image = None
         st.session_state.predicted_label = None
-        st.session_state.audio_file     = None
+        st.session_state.audio_file = None
 with col2:
     if st.session_state.show_camera:
         if st.button("❌ Cancel Capture"):
             st.session_state.show_camera = False
             st.rerun()
 
-# -- File upload --
+# ------------------ File Upload ------------------
 uploaded_file = st.file_uploader("📁 Upload Image", type=["jpg", "png", "jpeg"])
+
 if uploaded_file is not None:
     if st.session_state.last_upload != uploaded_file.name:
         st.session_state.last_upload = uploaded_file.name
-        run_pipeline(Image.open(uploaded_file).convert("RGB"))
+        pil_image = Image.open(uploaded_file).convert('RGB')
+        run_pipeline(pil_image)
 
-# -- Webcam capture --
+# ------------------ Camera Capture ------------------
 elif st.session_state.show_camera:
     captured = st.camera_input("Take a Picture")
     if captured is not None:
         st.session_state.latest_image = captured
-        st.session_state.show_camera  = False
+        st.session_state.show_camera = False
         st.rerun()
 
 if st.session_state.latest_image is not None:
-    run_pipeline(Image.open(st.session_state.latest_image).convert("RGB"))
+    pil_image = Image.open(st.session_state.latest_image).convert('RGB')
     st.session_state.latest_image = None
+    run_pipeline(pil_image)
 
-# -- Results --
+# ------------------ Display Results ------------------
 if st.session_state.current_image is not None:
 
     col_orig, col_lm = st.columns(2)
@@ -442,21 +342,29 @@ if st.session_state.current_image is not None:
         if st.session_state.landmark_image is not None:
             st.image(st.session_state.landmark_image, use_container_width=True)
 
-    badges = [
-        ("✅" if st.session_state.face_detected else "❌") + " Face",
-        ("✅" if st.session_state.pose_detected else "❌") + " Pose",
-        ("✅" if st.session_state.hand_detected else "❌") + " Hand(s)",
-    ]
-    st.caption(
-        f"Detected: {' | '.join(badges)} | "
-        f"Keypoints: {st.session_state.keypoint_count}"
-    )
+    # Detection status badges
+    badges = []
+    if st.session_state.face_detected:
+        badges.append("✅ Face")
+    else:
+        badges.append("❌ Face")
+    if st.session_state.pose_detected:
+        badges.append("✅ Pose")
+    else:
+        badges.append("❌ Pose")
+    if st.session_state.hand_detected:
+        badges.append("✅ Hand(s)")
+    else:
+        badges.append("❌ Hand(s)")
+
+    st.caption(f"Detected: {' | '.join(badges)} | Keypoints: {st.session_state.keypoint_count}")
+
+    # Prediction results
+    label = st.session_state.predicted_label
+    punjabi = st.session_state.punjabi_text
+    conf = st.session_state.confidence
 
     st.divider()
-
-    label   = st.session_state.predicted_label
-    punjabi = st.session_state.punjabi_text
-    conf    = st.session_state.confidence
 
     if label == "Not Recognized":
         st.error("❌ Sign not recognized (low confidence)")
@@ -472,6 +380,6 @@ if st.session_state.current_image is not None:
             audio_file = generate_audio(st.session_state.punjabi_text)
             if audio_file:
                 st.session_state.audio_file = audio_file
-
+    
     if st.session_state.audio_file:
         st.audio(st.session_state.audio_file, format="audio/wav")

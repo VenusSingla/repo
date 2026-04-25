@@ -9,8 +9,7 @@ import numpy as np
 from PIL import Image
 from transformers import AutoImageProcessor, SwinForImageClassification
 from huggingface_hub import login
-from scipy.io.wavfile import write as wavwrite, read as wavread
-from scipy.signal import resample
+from scipy.io.wavfile import write as wavwrite
 import mediapipe as mp
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -28,7 +27,6 @@ _ONES_PA = ["","ਇੱਕ","ਦੋ","ਤਿੰਨ","ਚਾਰ","ਪੰਜ","ਛ�
             "ਗਿਆਰਾਂ","ਬਾਰਾਂ","ਤੇਰਾਂ","ਚੌਦਾਂ","ਪੰਦਰਾਂ","ਸੋਲਾਂ","ਸਤਾਰਾਂ","ਅਠਾਰਾਂ","ਉਨੀ","ਵੀਹ"]
 _TENS_PA = ["","","ਵੀਹ","ਤੀਹ","ਚਾਲੀ","ਪੰਜਾਹ","ਸੱਠ","ਸੱਤਰ","ਅੱਸੀ","ਨੱਬੇ"]
 
-_TTS_SR        = 22050
 _TTS_CACHE_DIR = "/tmp/pa_tts_cache"
 _TTS_MEM: dict = {}
 os.makedirs(_TTS_CACHE_DIR, exist_ok=True)
@@ -65,81 +63,48 @@ def _tts_preprocess(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def _normalize_wav(data: np.ndarray, sr: int) -> np.ndarray:
-    if data.ndim > 1:
-        data = data[:, 0]
-    if sr != _TTS_SR:
-        data = resample(data, int(len(data) * _TTS_SR / sr))
-    peak = np.abs(data).max()
-    return (data / peak if peak > 0 else data).astype(np.float32)
+def _gtts_to_bytes(text: str):
+    """
+    Synthesise Punjabi text via gTTS and return raw MP3 bytes.
+    Uses BytesIO so no file-path or /tmp permission issues.
+    Results cached in _TTS_MEM and to disk for reuse.
+    """
+    cache_key = f"bytes:{text}"
+    if cache_key in _TTS_MEM:
+        return _TTS_MEM[cache_key]
 
-
-def _mp3_to_wav(mp3_path: str):
-    """Try pydub then ffmpeg to decode MP3. Returns float32 array or None."""
-    try:
-        from pydub import AudioSegment
-        audio = (AudioSegment.from_mp3(mp3_path)
-                 .set_frame_rate(_TTS_SR).set_channels(1))
-        samples = np.array(audio.get_array_of_samples(), dtype=np.float32)
-        return _normalize_wav(samples, _TTS_SR)
-    except Exception:
-        pass
-    try:
-        import subprocess, tempfile
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as t:
-            wp = t.name
-        subprocess.run(
-            ["ffmpeg", "-y", "-i", mp3_path, "-ar", str(_TTS_SR), "-ac", "1", wp],
-            capture_output=True, check=True,
-        )
-        sr, data = wavread(wp)
-        os.unlink(wp)
-        return _normalize_wav(data.astype(np.float32), sr)
-    except Exception:
-        pass
-    return None
-
-
-def _gtts_synthesize(text: str) -> np.ndarray:
-    """Synthesise Punjabi text via gTTS (whole phrase). Disk-cached."""
     safe = re.sub(r"[^a-zA-Z0-9_]", "_",
                   text.encode("unicode_escape").decode("ascii"))[:80]
-    cache_file = os.path.join(_TTS_CACHE_DIR, f"pa_{safe}.wav")
+    cache_file = os.path.join(_TTS_CACHE_DIR, f"pa_{safe}.mp3")
 
-    if cache_file in _TTS_MEM:
-        return _TTS_MEM[cache_file]
-    if os.path.exists(cache_file):
-        sr, data = wavread(cache_file)
-        wav = _normalize_wav(data.astype(np.float32), sr)
-        _TTS_MEM[cache_file] = wav
-        return wav
+    if os.path.exists(cache_file) and os.path.getsize(cache_file) > 0:
+        with open(cache_file, "rb") as f:
+            data = f.read()
+        _TTS_MEM[cache_key] = data
+        return data
 
     try:
         from gtts import gTTS
-        import tempfile
-        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as t:
-            mp3 = t.name
-        gTTS(text=text, lang="pa", slow=False).save(mp3)
-        wav = _mp3_to_wav(mp3)
-        os.unlink(mp3)
-        if wav is not None:
-            wavwrite(cache_file, _TTS_SR, (wav * 32767).astype(np.int16))
-            _TTS_MEM[cache_file] = wav
-            return wav
+        import io
+        buf = io.BytesIO()
+        gTTS(text=text, lang="pa", slow=False).write_to_fp(buf)
+        buf.seek(0)
+        data = buf.read()
+        if len(data) > 0:
+            with open(cache_file, "wb") as f:
+                f.write(data)
+            _TTS_MEM[cache_key] = data
+            return data
+        print(f"[TTS] gTTS returned 0 bytes for: {text!r}")
     except Exception as e:
-        print(f"[TTS] gTTS error for '{text}': {e}")
+        print(f"[TTS] gTTS failed for {text!r}: {e}")
 
-    silence = np.zeros(int(_TTS_SR * 0.3), dtype=np.float32)
-    _TTS_MEM[cache_file] = silence
-    return silence
+    return None
 
 
-def synthesize_punjabi(text: str,
-                       output_path: str = "/tmp/output_audio.wav") -> str:
-    """Preprocess Punjabi text, synthesise via gTTS, write WAV. Returns path."""
-    wav = _gtts_synthesize(_tts_preprocess(text))
-    wavwrite(output_path, _TTS_SR, (wav * 32000).astype(np.int16))
-    return output_path
+def synthesize_punjabi(text: str):
+    """Preprocess + synthesise. Returns raw MP3 bytes or None."""
+    return _gtts_to_bytes(_tts_preprocess(text))
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -355,11 +320,25 @@ def perform_inference(pil_image: Image.Image, threshold: float = 0.3):
 #  AUDIO GENERATION
 # ═══════════════════════════════════════════════════════════════════════════
 
-_AUDIO_OUTPUT = "/tmp/output_audio.wav"
-
 def generate_audio(text: str):
+    """
+    Returns raw MP3 bytes for st.audio(), or None on failure.
+    Errors are surfaced visibly — nothing fails silently.
+    """
+    if not text or not text.strip():
+        st.error("No Punjabi text to synthesise.")
+        return None
     try:
-        return synthesize_punjabi(text, output_path=_AUDIO_OUTPUT)
+        from gtts import gTTS  # noqa — confirm importable
+    except ImportError:
+        st.error("gtts not installed. Run: pip install gtts")
+        return None
+    try:
+        data = synthesize_punjabi(text)
+        if not data:
+            st.error("Audio synthesis returned empty data. Check internet connectivity.")
+            return None
+        return data
     except Exception as e:
         st.error(f"Audio generation failed: {e}")
         return None
@@ -469,9 +448,10 @@ if st.session_state.current_image is not None:
 
     if st.button("🔊 Generate Audio"):
         with st.spinner("Generating audio..."):
-            audio_file = generate_audio(st.session_state.punjabi_text)
-            if audio_file:
-                st.session_state.audio_file = audio_file
+            audio_bytes = generate_audio(st.session_state.punjabi_text)
+            if audio_bytes:
+                st.session_state.audio_file = audio_bytes   # store raw bytes
 
     if st.session_state.audio_file:
-        st.audio(st.session_state.audio_file, format="audio/wav")
+        # Pass bytes directly — avoids all /tmp file-path & permission issues
+        st.audio(st.session_state.audio_file, format="audio/mp3")

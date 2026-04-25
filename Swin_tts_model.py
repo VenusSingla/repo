@@ -3,127 +3,16 @@ import re
 import warnings
 warnings.filterwarnings("ignore")
 
+import io
 import streamlit as st
 import torch
 import numpy as np
 from PIL import Image
 from transformers import AutoImageProcessor, SwinForImageClassification
+from transformers import VitsModel, AutoTokenizer
 from huggingface_hub import login
 from scipy.io.wavfile import write as wavwrite
 import mediapipe as mp
-
-# ═══════════════════════════════════════════════════════════════════════════
-#  PUNJABI TTS  (inlined — no separate punjabi_tts.py needed in repo)
-#  Based on: Singh & Lehal (2012), COLING 2012
-# ═══════════════════════════════════════════════════════════════════════════
-
-_ABBR = {
-    "ਡਾ.": "ਡਾਕਟਰ", "ਸ੍ਰ.": "ਸਰਦਾਰ", "ਪ੍ਰੋ.": "ਪ੍ਰੋਫੈਸਰ",
-    "ਸ਼੍ਰੀ": "ਸ਼੍ਰੀਮਾਨ", "ਕਿ.ਮੀ.": "ਕਿਲੋਮੀਟਰ", "ਰੁ.": "ਰੁਪਏ",
-}
-_GUR_DIGITS = {"੦":"0","੧":"1","੨":"2","੩":"3","੪":"4",
-               "੫":"5","੬":"6","੭":"7","੮":"8","੯":"9"}
-_ONES_PA = ["","ਇੱਕ","ਦੋ","ਤਿੰਨ","ਚਾਰ","ਪੰਜ","ਛੇ","ਸੱਤ","ਅੱਠ","ਨੌਂ","ਦਸ",
-            "ਗਿਆਰਾਂ","ਬਾਰਾਂ","ਤੇਰਾਂ","ਚੌਦਾਂ","ਪੰਦਰਾਂ","ਸੋਲਾਂ","ਸਤਾਰਾਂ","ਅਠਾਰਾਂ","ਉਨੀ","ਵੀਹ"]
-_TENS_PA = ["","","ਵੀਹ","ਤੀਹ","ਚਾਲੀ","ਪੰਜਾਹ","ਸੱਠ","ਸੱਤਰ","ਅੱਸੀ","ਨੱਬੇ"]
-
-_TTS_CACHE_DIR = "/tmp/pa_tts_cache"
-_TTS_MEM: dict = {}
-os.makedirs(_TTS_CACHE_DIR, exist_ok=True)
-
-
-def _num_to_pa(n: int) -> str:
-    if n == 0:
-        return "ਜ਼ੀਰੋ"
-    parts = []
-    if n >= 100:
-        parts.append(_ONES_PA[n // 100] + " ਸੌ")
-        n %= 100
-    if n >= 21:
-        t, o = n // 10, n % 10
-        parts.append(_TENS_PA[t] if o == 0 else _TENS_PA[t] + " " + _ONES_PA[o])
-    elif n > 0:
-        parts.append(_ONES_PA[n])
-    return " ".join(parts)
-
-
-def _tts_preprocess(text: str) -> str:
-    for a, f in _ABBR.items():
-        text = text.replace(a, f)
-    def _exp(m):
-        s = m.group(0)
-        for g, a in _GUR_DIGITS.items():
-            s = s.replace(g, a)
-        try:
-            return _num_to_pa(int(s))
-        except ValueError:
-            return s
-    text = re.sub("[੦-੯0-9]+", _exp, text)
-    text = re.sub(r"[।॥,;:!?\"'()\[\]{}<>]", " ", text)
-    return re.sub(r"\s+", " ", text).strip()
-
-
-def _gtts_to_bytes(text: str) -> bytes:
-    """
-    Synthesise Punjabi text via gTTS and return raw MP3 bytes.
-
-    Uses gTTS.save() → named temp file → read bytes → delete temp.
-    write_to_fp(BytesIO) can silently produce 0 bytes in certain
-    environments; save() is the most tested and reliable gTTS path.
-    Exceptions propagate directly so callers can show them in the UI.
-    Results are cached in memory and on disk (/tmp) for reuse.
-    """
-    import tempfile
-    from gtts import gTTS
-
-    cache_key = f"bytes:{text}"
-    if cache_key in _TTS_MEM:
-        return _TTS_MEM[cache_key]
-
-    safe = re.sub(r"[^a-zA-Z0-9_]", "_",
-                  text.encode("unicode_escape").decode("ascii"))[:80]
-    cache_file = os.path.join(_TTS_CACHE_DIR, f"pa_{safe}.mp3")
-
-    # Disk cache hit — read and return
-    if os.path.exists(cache_file) and os.path.getsize(cache_file) > 0:
-        with open(cache_file, "rb") as f:
-            data = f.read()
-        _TTS_MEM[cache_key] = data
-        return data
-
-    # Generate: save() to a real named temp file, then read bytes
-    tmp_path = None
-    try:
-        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
-            tmp_path = tmp.name
-        gTTS(text=text, lang="pa", slow=False).save(tmp_path)
-        with open(tmp_path, "rb") as f:
-            data = f.read()
-    finally:
-        if tmp_path and os.path.exists(tmp_path):
-            os.unlink(tmp_path)
-
-    if len(data) == 0:
-        raise RuntimeError(
-            f"gTTS.save() produced 0 bytes for {text!r}. "
-            "This usually means a network/firewall issue blocked the Google TTS API."
-        )
-
-    # Persist to disk cache (non-fatal if it fails)
-    try:
-        with open(cache_file, "wb") as f:
-            f.write(data)
-    except OSError:
-        pass
-
-    _TTS_MEM[cache_key] = data
-    return data
-
-
-def synthesize_punjabi(text: str) -> bytes:
-    """Preprocess + synthesise. Returns raw MP3 bytes. Raises on failure."""
-    return _gtts_to_bytes(_tts_preprocess(text))
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  MEDIAPIPE HOLISTIC SETUP
@@ -145,7 +34,7 @@ holistic = load_holistic()
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-#  LOAD ML MODELS  (Swin only — VitsModel removed)
+#  LOAD ML MODELS
 # ═══════════════════════════════════════════════════════════════════════════
 
 @st.cache_resource
@@ -160,12 +49,18 @@ def load_models():
         proc = AutoImageProcessor.from_pretrained(
             "vsingla/Swin_transformer", token=hf_token
         )
-        return swin, proc
+        tts_model = VitsModel.from_pretrained(
+            "facebook/mms-tts-pan", token=hf_token
+        )
+        tokenizer = AutoTokenizer.from_pretrained(
+            "facebook/mms-tts-pan", token=hf_token
+        )
+        return swin, proc, tts_model, tokenizer
     except OSError as e:
         st.error(f"Failed to load models: {e}")
         st.stop()
 
-model, processor = load_models()
+model, processor, model_speech, tokenizer = load_models()
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -340,26 +235,37 @@ def perform_inference(pil_image: Image.Image, threshold: float = 0.3):
 
 def generate_audio(text: str):
     """
-    Returns raw MP3 bytes for st.audio(), or None on failure.
-    Every failure path shows the REAL error in the UI.
+    Synthesise Punjabi text using facebook/mms-tts-pan (VitsModel).
+    Returns raw WAV bytes for st.audio() — no temp files, no file-path issues.
     """
     if not text or not text.strip():
         st.error("No Punjabi text to synthesise.")
         return None
-
     try:
-        from gtts import gTTS  # noqa
-    except ImportError:
-        st.error("gtts not installed. Add  to requirements.txt and redeploy.")
-        return None
+        inputs = tokenizer(text, return_tensors="pt")
+        with torch.no_grad():
+            output = model_speech(**inputs)
 
-    try:
-        data = synthesize_punjabi(text)
-        return data
+        # Squeeze waveform to 1-D safely
+        waveform = output.waveform.squeeze().cpu().numpy()
+        if waveform.ndim == 2:
+            waveform = waveform[0]
+
+        # Normalise + convert to int16
+        peak = np.abs(waveform).max()
+        if peak > 0:
+            waveform = waveform / peak
+        waveform_int16 = (waveform * 32000).astype(np.int16)
+
+        # Write WAV into memory — never touches disk
+        buf = io.BytesIO()
+        wavwrite(buf, model_speech.config.sampling_rate, waveform_int16)
+        buf.seek(0)
+        return buf.read()
+
     except Exception as e:
-        # Show the full real error — gTTS network errors, SSL issues etc.
         import traceback
-        st.error(f"TTS failed: {type(e).__name__}: {e}")
+        st.error(f"Audio generation failed: {type(e).__name__}: {e}")
         st.code(traceback.format_exc(), language="")
         return None
 
@@ -474,4 +380,4 @@ if st.session_state.current_image is not None:
 
     if st.session_state.audio_file:
         # Pass bytes directly — avoids all /tmp file-path & permission issues
-        st.audio(st.session_state.audio_file, format="audio/mp3")
+        st.audio(st.session_state.audio_file, format="audio/wav")

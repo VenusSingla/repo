@@ -1,4 +1,4 @@
-opencv-python-headless
+opencv-python-headless==4.8.1.78
 numpy<2
 torch>=2.4.0
 torchvision
